@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'dart:io';
 import 'dart:convert';
+import 'package:flutter/services.dart'; // For TextInputFormatters
 
 void main() {
   runApp(const ImageSelectorApp());
@@ -37,11 +38,14 @@ class _ImageSelectorScreenState extends State<ImageSelectorScreen> {
   final List<String> _analysisResults = [];
   final ImagePicker _picker = ImagePicker();
 
+  // IP Address Controller
+  final TextEditingController _ipController =
+      TextEditingController()..text = '192.168.138.190'; // Default IP
+
   Future<void> _pickImage(ImageSource source) async {
     try {
       final pickedFile = await _picker.pickImage(source: source);
       if (!mounted) return;
-
       if (pickedFile != null) {
         setState(() => _selectedImage = File(pickedFile.path));
       }
@@ -62,6 +66,14 @@ class _ImageSelectorScreenState extends State<ImageSelectorScreen> {
       return;
     }
 
+    // Validate IP address
+    if (_ipController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter server IP address')),
+      );
+      return;
+    }
+
     setState(() {
       _isSending = true;
       _analysisResults.clear();
@@ -70,7 +82,7 @@ class _ImageSelectorScreenState extends State<ImageSelectorScreen> {
     try {
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('http://192.168.103.190:8000/upload'),
+        Uri.parse('http://${_ipController.text}:8000/upload'),
       );
 
       // Add form data
@@ -91,29 +103,21 @@ class _ImageSelectorScreenState extends State<ImageSelectorScreen> {
         ),
       );
 
-      // Debug print
-      print('Sending to: ${request.url}');
-      print('With option: ${request.fields['option']}');
-
       var response = await request.send();
       final responseBody = await response.stream.bytesToString();
-      print('Raw response: $responseBody');
 
       if (!mounted) return;
-
       if (response.statusCode == 200) {
         final List<dynamic> resultList = jsonDecode(responseBody);
         setState(() {
           _analysisResults.addAll(resultList.map((e) => e.toString()));
         });
       } else {
-        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Analysis failed (${response.statusCode})')),
         );
       }
     } catch (e) {
-      print('Full error: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Connection error: ${e.toString()}')),
@@ -132,6 +136,27 @@ class _ImageSelectorScreenState extends State<ImageSelectorScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // IP Address Input
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16.0),
+              child: TextField(
+                controller: _ipController,
+                decoration: InputDecoration(
+                  labelText: 'Server IP Address',
+                  hintText: 'e.g. 192.168.1.100',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  prefixIcon: const Icon(Icons.network_wifi),
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(
+                    RegExp(r'^([0-9]{1,3}\.){0,3}[0-9]{1,3}$'),
+                  ),
+                ],
+              ),
+            ),
+
             // Image and Results Row
             Expanded(
               child: Row(
@@ -172,7 +197,6 @@ class _ImageSelectorScreenState extends State<ImageSelectorScreen> {
                     ),
                   ),
                   const SizedBox(width: 12),
-
                   // Analysis Results
                   Expanded(
                     flex: 4,
@@ -224,7 +248,6 @@ class _ImageSelectorScreenState extends State<ImageSelectorScreen> {
               ),
             ),
             const SizedBox(height: 20),
-
             // Option Selector
             DropdownButtonFormField<String>(
               decoration: InputDecoration(
@@ -246,7 +269,6 @@ class _ImageSelectorScreenState extends State<ImageSelectorScreen> {
               onChanged: (value) => setState(() => _selectedOption = value),
             ),
             const SizedBox(height: 20),
-
             // Analyze Button
             ElevatedButton(
               onPressed: _isSending ? null : _sendForAnalysis,
@@ -266,7 +288,6 @@ class _ImageSelectorScreenState extends State<ImageSelectorScreen> {
                       : const Text('ANALYZE IMAGE'),
             ),
             const SizedBox(height: 16),
-
             // Camera/Gallery Buttons
             Padding(
               padding: const EdgeInsets.only(bottom: 24.0),

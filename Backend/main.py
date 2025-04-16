@@ -30,9 +30,9 @@ Path(UPLOAD_DIR).mkdir(exist_ok=True)
 Path(ANALYZED_DIR).mkdir(exist_ok=True)
 
 MODEL_PATHS = {
-    "yolov8n": "D:/DEV/Python/AI/models/yolov8n.pt",
-    "yolov8m": "D:/DEV/Python/AI/models/yolov8m.pt",
-    "yolov8x": "D:/DEV/Python/AI/models/yolov8x.pt"
+    "yolov8n": "D:/DEV/Forth Year Project/prototype/Backend/models/yolov8n.pt",
+    "yolov8m": "D:/DEV/Forth Year Project/prototype/Backend/models/yolov8m.pt",
+    "yolov8x": "D:/DEV/Forth Year Project/prototype/Backend/models/yolov8x.pt"
 }
 
 
