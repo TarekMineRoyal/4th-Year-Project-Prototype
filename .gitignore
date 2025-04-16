@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+.env
+.vscode/ 
+
+# Exclude Python virtual environments
+.venv/
+venv/
+
+# Exclude IDE configurations
+.idea/
+
+# Exclude generated/processed data
+analyzed/
+uploads/
+
+# Exclude large binary files (e.g., pre-trained models)
+*.pt  # Example: yolov8n.pt
+models/
+
+# Exclude generated/build files
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+
+# Exclude platform-specific builds
+android/
+ios/
+linux/
+macos/
+windows/
+web/
+
+# Exclude IDE configurations
+.idea/
+*.iml  # IntelliJ/Android Studio project files
+
+# Exclude metadata and lockfiles
+.metadata
+pubspec.lock
