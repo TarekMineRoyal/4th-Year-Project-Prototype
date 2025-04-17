@@ -8,6 +8,7 @@ from PIL import Image
 import time
 import os
 import logging
+from huggingface_hub import InferenceClient  # New import
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -35,6 +36,11 @@ MODEL_PATHS = {
     "yolov8x": "D:/DEV/Forth Year Project/prototype/Backend/models/yolov8x.pt"
 }
 
+# Hugging Face API setup
+client = InferenceClient(
+    provider="hf-inference",
+    api_key="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",
+)
 
 def model_type_loader(option: str):
     """Load model from local path with enhanced error handling"""
@@ -74,11 +80,11 @@ async def upload_image(
         with open(upload_path, "wb") as buffer:
             shutil.copyfileobj(image.file, buffer)
 
-        # 2. Load model
+        # 2. Load YOLO model
         model = model_type_loader(option)
 
-        # 3. Process image
-        logger.info("Starting image processing")
+        # 3. Process with YOLO
+        logger.info("Starting YOLO processing")
         start_time = time.time()
 
         img = Image.open(upload_path)
@@ -87,22 +93,41 @@ async def upload_image(
 
         results = model(img)  # YOLO inference
         processing_time = round(time.time() - start_time, 2)
-        logger.info(f"Processing completed in {processing_time}s")
+        logger.info(f"YOLO processing completed in {processing_time}s")
 
-        # 4. Move to analyzed directory
+        # 4. Generate caption with BLIP
+
+        # output = client.image_to_text(img, model="Salesforce/blip-image-captioning-base")
+        logger.info("Generating caption with BLIP")
+        with open(upload_path, "rb") as f:
+            image_bytes = f.read()
+
+        try:
+
+            caption_result = client.image_to_text(image_bytes, model="Salesforce/blip-image-captioning-base")
+            caption = caption_result.generated_text  # Extracting the actual text
+        except Exception as e:
+            logger.warning("BLIP captioning failed, using default message")
+            caption = "Caption generation failed"
+
+        # 5. Move to analyzed directory
         analyzed_path = os.path.join(ANALYZED_DIR, f"analyzed_{timestamp}{file_ext}")
         shutil.move(upload_path, analyzed_path)
         logger.info(f"Moved file to: {analyzed_path}")
 
-        # 5. Format detections
+        # 6. Format detections
         detections = []
         for result in results:
             for box in result.boxes:
                 detections.append(
                     f"{result.names[int(box.cls)]} ({float(box.conf) * 100:.1f}%)"
                 )
-
-        return detections
+        print(caption)
+        return {
+            "detections": detections,
+            "caption": caption,
+            "processing_time": processing_time
+        }
 
     except HTTPException:
         raise

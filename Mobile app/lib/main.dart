@@ -4,7 +4,6 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'dart:io';
 import 'dart:convert';
-import 'package:flutter/services.dart'; // For TextInputFormatters
 
 void main() {
   runApp(const ImageSelectorApp());
@@ -23,6 +22,26 @@ class ImageSelectorApp extends StatelessWidget {
   }
 }
 
+class ProcessingResult {
+  final List<String> detections;
+  final String caption;
+  final double processingTime;
+
+  ProcessingResult({
+    required this.detections,
+    required this.caption,
+    required this.processingTime,
+  });
+
+  factory ProcessingResult.fromJson(Map<String, dynamic> json) {
+    return ProcessingResult(
+      detections: List<String>.from(json['detections']),
+      caption: json['caption'],
+      processingTime: json['processing_time'].toDouble(),
+    );
+  }
+}
+
 class ImageSelectorScreen extends StatefulWidget {
   const ImageSelectorScreen({super.key});
 
@@ -35,19 +54,20 @@ class _ImageSelectorScreenState extends State<ImageSelectorScreen> {
   String? _selectedOption;
   bool _isSending = false;
   final List<String> _options = ['yolov8n', 'yolov8m', 'yolov8x'];
-  final List<String> _analysisResults = [];
+  ProcessingResult? _processingResult;
   final ImagePicker _picker = ImagePicker();
-
-  // IP Address Controller
   final TextEditingController _ipController =
-      TextEditingController()..text = '192.168.138.190'; // Default IP
+      TextEditingController()..text = '192.168.138.190';
 
   Future<void> _pickImage(ImageSource source) async {
     try {
       final pickedFile = await _picker.pickImage(source: source);
       if (!mounted) return;
       if (pickedFile != null) {
-        setState(() => _selectedImage = File(pickedFile.path));
+        setState(() {
+          _selectedImage = File(pickedFile.path);
+          _processingResult = null;
+        });
       }
     } catch (e) {
       if (!mounted) return;
@@ -59,14 +79,12 @@ class _ImageSelectorScreenState extends State<ImageSelectorScreen> {
 
   Future<void> _sendForAnalysis() async {
     if (_selectedImage == null || _selectedOption == null) {
-      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select both image and option')),
       );
       return;
     }
 
-    // Validate IP address
     if (_ipController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter server IP address')),
@@ -76,7 +94,7 @@ class _ImageSelectorScreenState extends State<ImageSelectorScreen> {
 
     setState(() {
       _isSending = true;
-      _analysisResults.clear();
+      _processingResult = null;
     });
 
     try {
@@ -85,10 +103,7 @@ class _ImageSelectorScreenState extends State<ImageSelectorScreen> {
         Uri.parse('http://${_ipController.text}:8000/upload'),
       );
 
-      // Add form data
       request.fields['option'] = _selectedOption!;
-
-      // Add image file with proper type
       final fileExt = _selectedImage!.path.split('.').last.toLowerCase();
       final contentType =
           fileExt == 'png'
@@ -108,9 +123,9 @@ class _ImageSelectorScreenState extends State<ImageSelectorScreen> {
 
       if (!mounted) return;
       if (response.statusCode == 200) {
-        final List<dynamic> resultList = jsonDecode(responseBody);
+        final Map<String, dynamic> jsonResponse = jsonDecode(responseBody);
         setState(() {
-          _analysisResults.addAll(resultList.map((e) => e.toString()));
+          _processingResult = ProcessingResult.fromJson(jsonResponse);
         });
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -136,33 +151,23 @@ class _ImageSelectorScreenState extends State<ImageSelectorScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // IP Address Input
             Padding(
               padding: const EdgeInsets.only(bottom: 16.0),
               child: TextField(
                 controller: _ipController,
                 decoration: InputDecoration(
                   labelText: 'Server IP Address',
-                  hintText: 'e.g. 192.168.1.100',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                   prefixIcon: const Icon(Icons.network_wifi),
                 ),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(
-                    RegExp(r'^([0-9]{1,3}\.){0,3}[0-9]{1,3}$'),
-                  ),
-                ],
               ),
             ),
-
-            // Image and Results Row
             Expanded(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Image Preview
                   Expanded(
                     flex: 6,
                     child: Container(
@@ -197,7 +202,6 @@ class _ImageSelectorScreenState extends State<ImageSelectorScreen> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  // Analysis Results
                   Expanded(
                     flex: 4,
                     child: Container(
@@ -208,7 +212,7 @@ class _ImageSelectorScreenState extends State<ImageSelectorScreen> {
                       ),
                       padding: const EdgeInsets.all(8),
                       child:
-                          _analysisResults.isEmpty
+                          _processingResult == null
                               ? const Center(
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
@@ -228,7 +232,7 @@ class _ImageSelectorScreenState extends State<ImageSelectorScreen> {
                                 ),
                               )
                               : ListView.builder(
-                                itemCount: _analysisResults.length,
+                                itemCount: _processingResult!.detections.length,
                                 itemBuilder:
                                     (context, index) => Card(
                                       margin: const EdgeInsets.only(bottom: 8),
@@ -236,7 +240,7 @@ class _ImageSelectorScreenState extends State<ImageSelectorScreen> {
                                       child: Padding(
                                         padding: const EdgeInsets.all(12),
                                         child: Text(
-                                          _analysisResults[index],
+                                          _processingResult!.detections[index],
                                           style: const TextStyle(fontSize: 14),
                                         ),
                                       ),
@@ -247,8 +251,43 @@ class _ImageSelectorScreenState extends State<ImageSelectorScreen> {
                 ],
               ),
             ),
+            Card(
+              margin: const EdgeInsets.only(top: 16, bottom: 16),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Image Description:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _processingResult?.caption ?? 'No description yet',
+                      style: TextStyle(
+                        color:
+                            _processingResult?.caption != null
+                                ? Colors.black
+                                : Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Processed in ${_processingResult?.processingTime ?? 0}s',
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
             const SizedBox(height: 20),
-            // Option Selector
             DropdownButtonFormField<String>(
               decoration: InputDecoration(
                 labelText: 'Select analysis mode',
@@ -269,7 +308,6 @@ class _ImageSelectorScreenState extends State<ImageSelectorScreen> {
               onChanged: (value) => setState(() => _selectedOption = value),
             ),
             const SizedBox(height: 20),
-            // Analyze Button
             ElevatedButton(
               onPressed: _isSending ? null : _sendForAnalysis,
               style: ElevatedButton.styleFrom(
@@ -288,7 +326,6 @@ class _ImageSelectorScreenState extends State<ImageSelectorScreen> {
                       : const Text('ANALYZE IMAGE'),
             ),
             const SizedBox(height: 16),
-            // Camera/Gallery Buttons
             Padding(
               padding: const EdgeInsets.only(bottom: 24.0),
               child: Row(
