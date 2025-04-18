@@ -1,21 +1,29 @@
+# === Imports ===
+# Standard Library
 import shutil
 from datetime import datetime
 from pathlib import Path
+import os
+import logging
+import time
+
+# Third-Party
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from ultralytics import YOLO
 from PIL import Image
-import time
-import os
-import logging
 from huggingface_hub import InferenceClient
 from dotenv import load_dotenv
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# === App Configuration ===
+# Load environment variables
 load_dotenv()
 
+# Logging Configuration
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Initialize FastAPI app
 app = FastAPI()
 
 # CORS Configuration
@@ -26,26 +34,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Directory setup
+# Directory Setup
 UPLOAD_DIR = "uploads"
 ANALYZED_DIR = "analyzed"
 Path(UPLOAD_DIR).mkdir(exist_ok=True)
 Path(ANALYZED_DIR).mkdir(exist_ok=True)
 
+# Model Configuration
 MODEL_PATHS = {
-    "yolov8n": "D:/DEV/Forth Year Project/prototype/Backend/models/yolov8n.pt",
-    "yolov8m": "D:/DEV/Forth Year Project/prototype/Backend/models/yolov8m.pt",
-    "yolov8x": "D:/DEV/Forth Year Project/prototype/Backend/models/yolov8x.pt"
+    "yolov8n": os.getenv("MODEL_YOLOv8n"),
+    "yolov8m": os.getenv("MODEL_YOLOv8m"),
+    "yolov8x": os.getenv("MODEL_YOLOv8x")
 }
 
-# Hugging Face API setup
+# Hugging Face Inference Client
 client = InferenceClient(
     provider="hf-inference",
-    api_key=os.getenv("HF_API_KEY")  # Read from environment variable
+    api_key=os.getenv("HF_API_KEY")
 )
 
-def model_type_loader(option: str):
-    """Load model from local path with enhanced error handling"""
+
+# === Model Loading Function ===
+def model_type_loader(option: str) -> YOLO:
+    """Load YOLO model with error handling and logging"""
     try:
         if option not in MODEL_PATHS:
             raise ValueError(f"Unknown model option: {option}")
@@ -64,67 +75,72 @@ def model_type_loader(option: str):
         raise
 
 
+# === Helper Functions ===
+def save_uploaded_image(image: UploadFile) -> str:
+    """Validate and save uploaded image with timestamp"""
+    if not image.content_type.startswith('image/'):
+        raise HTTPException(400, detail="Only image files allowed")
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    file_ext = os.path.splitext(image.filename)[1]
+    upload_path = os.path.join(UPLOAD_DIR, f"upload_{timestamp}{file_ext}")
+
+    with open(upload_path, "wb") as buffer:
+        shutil.copyfileobj(image.file, buffer)
+
+    return upload_path
+
+
+# === API Endpoints ===
 @app.post("/upload")
 async def upload_image(
         option: str = Form(...),
         image: UploadFile = File(...)
 ):
     try:
-        # 1. Validate and save image
-        if not image.content_type.startswith('image/'):
-            raise HTTPException(400, detail="Only image files allowed")
+        # 1. Save and validate image
+        upload_path = save_uploaded_image(image)
+        logger.info(f"Image saved to: {upload_path}")
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        file_ext = os.path.splitext(image.filename)[1]
-        upload_path = os.path.join(UPLOAD_DIR, f"upload_{timestamp}{file_ext}")
-
-        logger.info(f"Saving uploaded file to: {upload_path}")
-        with open(upload_path, "wb") as buffer:
-            shutil.copyfileobj(image.file, buffer)
-
-        # 2. Load YOLO model
+        # 2. Load selected YOLO model
         model = model_type_loader(option)
 
-        # 3. Process with YOLO
-        logger.info("Starting YOLO processing")
+        # 3. Perform object detection
         start_time = time.time()
-
-        img = Image.open(upload_path)
-        if img.mode != 'RGB':
-            img = img.convert('RGB')
-
-        results = model(img)  # YOLO inference
+        img = Image.open(upload_path).convert('RGB')
+        results = model(img)
         processing_time = round(time.time() - start_time, 2)
         logger.info(f"YOLO processing completed in {processing_time}s")
 
-        # 4. Generate caption with BLIP
-
-        # output = client.image_to_text(img, model="Salesforce/blip-image-captioning-base")
-        logger.info("Generating caption with BLIP")
-        with open(upload_path, "rb") as f:
-            image_bytes = f.read()
-
+        # 4. Generate image caption with BLIP
         try:
-
-            caption_result = client.image_to_text(image_bytes, model="Salesforce/blip-image-captioning-base")
-            caption = caption_result.generated_text  # Extracting the actual text
+            with open(upload_path, "rb") as f:
+                image_bytes = f.read()
+            caption_result = client.image_to_text(
+                image_bytes,
+                model="Salesforce/blip-image-captioning-base"
+            )
+            caption = caption_result.generated_text
         except Exception as e:
-            logger.warning("BLIP captioning failed, using default message")
+            logger.warning("BLIP captioning failed, using default message", exc_info=True)
             caption = "Caption generation failed"
 
-        # 5. Move to analyzed directory
-        analyzed_path = os.path.join(ANALYZED_DIR, f"analyzed_{timestamp}{file_ext}")
+        # 5. Move processed file to analyzed directory
+        analyzed_path = os.path.join(
+            ANALYZED_DIR,
+            f"analyzed_{datetime.now().strftime('%Y%m%d_%H%M%S')}{os.path.splitext(upload_path)[1]}"
+        )
         shutil.move(upload_path, analyzed_path)
-        logger.info(f"Moved file to: {analyzed_path}")
+        logger.info(f"File moved to: {analyzed_path}")
 
-        # 6. Format detections
+        # 6. Format detection results
         detections = []
         for result in results:
             for box in result.boxes:
                 detections.append(
                     f"{result.names[int(box.cls)]} ({float(box.conf) * 100:.1f}%)"
                 )
-        print(caption)
+
         return {
             "detections": detections,
             "caption": caption,
@@ -138,6 +154,7 @@ async def upload_image(
         raise HTTPException(500, detail=str(e))
 
 
+# === Entry Point ===
 if __name__ == "__main__":
     import uvicorn
 
