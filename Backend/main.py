@@ -8,11 +8,13 @@ from PIL import Image
 import time
 import os
 import logging
-from huggingface_hub import InferenceClient  # New import
+from huggingface_hub import InferenceClient
+from dotenv import load_dotenv
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+load_dotenv()
 
 app = FastAPI()
 
@@ -39,7 +41,7 @@ MODEL_PATHS = {
 # Hugging Face API setup
 client = InferenceClient(
     provider="hf-inference",
-    api_key="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",
+    api_key=os.getenv("HF_API_KEY")  # Read from environment variable
 )
 
 def model_type_loader(option: str):
