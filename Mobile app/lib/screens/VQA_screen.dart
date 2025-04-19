@@ -5,6 +5,26 @@ import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
+void main() {
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'VQA Demo',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
+      ),
+      home: const VQAScreen(),
+    );
+  }
+}
+
 class VQAScreen extends StatefulWidget {
   const VQAScreen({super.key});
 
@@ -71,7 +91,7 @@ class _VQAScreenState extends State<VQAScreen> {
     try {
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('http://${_ipController.text}:8000/vqa'), // New endpoint
+        Uri.parse('http://${_ipController.text}:8000/vqa'),
       );
       request.fields['option'] = _selectedOption!;
       request.fields['question'] = _questionController.text;
@@ -124,14 +144,13 @@ class _VQAScreenState extends State<VQAScreen> {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16.0),
-              child: TextField(
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
                 controller: _ipController,
                 decoration: InputDecoration(
                   labelText: 'Server IP Address',
@@ -141,168 +160,133 @@ class _VQAScreenState extends State<VQAScreen> {
                   prefixIcon: const Icon(Icons.network_wifi),
                 ),
               ),
-            ),
-            Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    flex: 6,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey.shade300),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child:
-                          _selectedImage == null
-                              ? const Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.image_outlined,
-                                    size: 60,
-                                    color: Colors.grey,
-                                  ),
-                                  SizedBox(height: 8),
-                                  Text(
-                                    'No image selected',
-                                    style: TextStyle(color: Colors.grey),
-                                  ),
-                                ],
-                              )
-                              : ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: Image.file(
-                                  _selectedImage!,
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                    ),
+              const SizedBox(height: 20),
+              Container(
+                height: 300,
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child:
+                    _selectedImage == null
+                        ? Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(
+                              Icons.image_outlined,
+                              size: 60,
+                              color: Colors.grey,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'No image selected',
+                              style: TextStyle(color: Colors.grey.shade600),
+                            ),
+                          ],
+                        )
+                        : ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.file(_selectedImage!, fit: BoxFit.cover),
+                        ),
+              ),
+              const SizedBox(height: 20),
+              TextField(
+                controller: _questionController,
+                decoration: InputDecoration(
+                  labelText: 'Your question',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 4,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
-                        border: Border.all(color: Colors.blueGrey.shade100),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      padding: const EdgeInsets.all(8),
-                      child: Column(
-                        children: [
-                          TextField(
-                            controller: _questionController,
-                            decoration: InputDecoration(
-                              labelText: 'Your question',
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
+                ),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 20),
+              Container(
+                height: 62,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.blue.shade100),
+                ),
+                child:
+                    _answer == null
+                        ? Column(
+                          children: [
+                            const SizedBox(height: 8),
+                            Text(
+                              'Answer will appear here',
+                              style: TextStyle(color: Colors.grey.shade600),
+                            ),
+                          ],
+                        )
+                        : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Answer:',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).primaryColor,
                               ),
                             ),
-                            maxLines: 3,
-                          ),
-                          const SizedBox(height: 16),
-                          Expanded(
-                            child:
-                                _answer == null
-                                    ? const Center(
-                                      child: Column(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          Icon(
-                                            Icons.question_answer_outlined,
-                                            size: 40,
-                                            color: Colors.grey,
-                                          ),
-                                          SizedBox(height: 8),
-                                          Text(
-                                            'Answer will appear here',
-                                            textAlign: TextAlign.center,
-                                            style: TextStyle(
-                                              color: Colors.grey,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    )
-                                    : Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Answer:',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 16,
-                                            color:
-                                                Theme.of(context).primaryColor,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          _answer!,
-                                          style: const TextStyle(fontSize: 14),
-                                        ),
-                                        const SizedBox(height: 16),
-                                        Text(
-                                          'Processed in ${_processingTime?.toStringAsFixed(2)}s',
-                                          style: TextStyle(
-                                            color: Colors.grey.shade600,
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            DropdownButtonFormField<String>(
-              decoration: InputDecoration(
-                labelText: 'Select VQA model',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              value: _selectedOption,
-              items:
-                  _options
-                      .map(
-                        (option) => DropdownMenuItem(
-                          value: option,
-                          child: Text(option),
+                            const SizedBox(height: 12),
+                            Text(
+                              _answer!,
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Processed in ${_processingTime?.toStringAsFixed(2)}s',
+                              style: TextStyle(
+                                color: Colors.grey.shade600,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
                         ),
-                      )
-                      .toList(),
-              onChanged: (value) => setState(() => _selectedOption = value),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _isSending ? null : _sendForAnalysis,
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
               ),
-              child:
-                  _isSending
-                      ? const SizedBox(
-                        height: 24,
-                        width: 24,
-                        child: CircularProgressIndicator(strokeWidth: 3),
-                      )
-                      : const Text('GET ANSWER'),
-            ),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 24.0),
-              child: Row(
+              const SizedBox(height: 20),
+              DropdownButtonFormField<String>(
+                decoration: InputDecoration(
+                  labelText: 'Select VQA model',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                value: _selectedOption,
+                items:
+                    _options
+                        .map(
+                          (option) => DropdownMenuItem(
+                            value: option,
+                            child: Text(option),
+                          ),
+                        )
+                        .toList(),
+                onChanged: (value) => setState(() => _selectedOption = value),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: _isSending ? null : _sendForAnalysis,
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child:
+                    _isSending
+                        ? const SizedBox(
+                          height: 24,
+                          width: 24,
+                          child: CircularProgressIndicator(strokeWidth: 3),
+                        )
+                        : const Text('GET ANSWER'),
+              ),
+              const SizedBox(height: 20),
+              Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   FilledButton.icon(
@@ -335,8 +319,8 @@ class _VQAScreenState extends State<VQAScreen> {
                   ),
                 ],
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

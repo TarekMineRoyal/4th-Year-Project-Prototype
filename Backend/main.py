@@ -14,19 +14,18 @@ from ultralytics import YOLO
 from PIL import Image
 from huggingface_hub import InferenceClient
 from dotenv import load_dotenv
+from transformers import pipeline
 
-# === App Configuration ===
-# Load environment variables
+# === Application Configuration ===
+# Environment Variables
 load_dotenv()
 
-# Logging Configuration
+# Logging Setup
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize FastAPI app
+# FastAPI Setup
 app = FastAPI()
-
-# CORS Configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -34,127 +33,176 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Directory Setup
+# Directory Configuration
 UPLOAD_DIR = "uploads"
 ANALYZED_DIR = "analyzed"
 Path(UPLOAD_DIR).mkdir(exist_ok=True)
 Path(ANALYZED_DIR).mkdir(exist_ok=True)
 
-# Model Configuration
+# Model Paths (configured via environment variables)
 MODEL_PATHS = {
     "yolov8n": os.getenv("MODEL_YOLOv8n"),
     "yolov8m": os.getenv("MODEL_YOLOv8m"),
-    "yolov8x": os.getenv("MODEL_YOLOv8x")
+    "yolov8x": os.getenv("MODEL_YOLOv8x"),
+    "blip-vqa-base": "models/blip-vqa-base"
 }
 
-# Hugging Face Inference Client
+# Hugging Face Client
 client = InferenceClient(
     provider="hf-inference",
     api_key=os.getenv("HF_API_KEY")
 )
 
 
-# === Model Loading Function ===
+# === Model Management ===
 def model_type_loader(option: str) -> YOLO:
-    """Load YOLO model with error handling and logging"""
+    """Load YOLO model with validation and error handling"""
     try:
         if option not in MODEL_PATHS:
-            raise ValueError(f"Unknown model option: {option}")
+            raise ValueError(f"Unsupported model: {option}")
 
         model_path = MODEL_PATHS[option]
         if not os.path.exists(model_path):
-            raise FileNotFoundError(f"Model file not found at: {model_path}")
+            raise FileNotFoundError(f"Missing model file: {model_path}")
 
         logger.info(f"Loading model: {model_path}")
         model = YOLO(model_path)
-        logger.info(f"Successfully loaded model: {option}")
+        logger.info(f"Model loaded successfully: {option}")
         return model
 
     except Exception as e:
-        logger.error(f"Model loading failed: {str(e)}")
+        logger.error(f"Model loading error: {str(e)}")
         raise
 
 
 # === Helper Functions ===
 def save_uploaded_image(image: UploadFile) -> str:
-    """Validate and save uploaded image with timestamp"""
+    """Validate image type and save with timestamp"""
     if not image.content_type.startswith('image/'):
-        raise HTTPException(400, detail="Only image files allowed")
+        raise HTTPException(400, "Invalid file type - only images allowed")
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     file_ext = os.path.splitext(image.filename)[1]
-    upload_path = os.path.join(UPLOAD_DIR, f"upload_{timestamp}{file_ext}")
+    save_path = os.path.join(UPLOAD_DIR, f"upload_{timestamp}{file_ext}")
 
-    with open(upload_path, "wb") as buffer:
+    with open(save_path, "wb") as buffer:
         shutil.copyfileobj(image.file, buffer)
 
-    return upload_path
+    return save_path
 
 
 # === API Endpoints ===
 @app.post("/upload")
 async def upload_image(
-        option: str = Form(...),
-        image: UploadFile = File(...)
+        option: str = Form(..., description="Model type (yolov8n/m/x)"),
+        image: UploadFile = File(..., description="Image file")
 ):
+    """Object detection and image captioning endpoint"""
     try:
-        # 1. Save and validate image
+        # Image Validation & Storage
         upload_path = save_uploaded_image(image)
-        logger.info(f"Image saved to: {upload_path}")
+        logger.info(f"Image received: {upload_path}")
 
-        # 2. Load selected YOLO model
+        # Model Execution
         model = model_type_loader(option)
-
-        # 3. Perform object detection
-        start_time = time.time()
         img = Image.open(upload_path).convert('RGB')
+
+        # Object Detection
+        start_time = time.time()
         results = model(img)
         processing_time = round(time.time() - start_time, 2)
-        logger.info(f"YOLO processing completed in {processing_time}s")
+        logger.info(f"Detection completed in {processing_time}s")
 
-        # 4. Generate image caption with BLIP
+        # Caption Generation
         try:
             with open(upload_path, "rb") as f:
-                image_bytes = f.read()
-            caption_result = client.image_to_text(
-                image_bytes,
-                model="Salesforce/blip-image-captioning-base"
-            )
-            caption = caption_result.generated_text
-        except Exception as e:
-            logger.warning("BLIP captioning failed, using default message", exc_info=True)
-            caption = "Caption generation failed"
+                caption = client.image_to_text(
+                    f.read(),
+                    model="Salesforce/blip-image-captioning-base"
+                ).generated_text
+        except Exception:
+            logger.warning("Caption generation failed", exc_info=True)
+            caption = "Caption unavailable"
 
-        # 5. Move processed file to analyzed directory
+        # File Management
         analyzed_path = os.path.join(
             ANALYZED_DIR,
-            f"analyzed_{datetime.now().strftime('%Y%m%d_%H%M%S')}{os.path.splitext(upload_path)[1]}"
+            f"analyzed_{datetime.now().strftime('%Y%m%d_%H%M%S')}{Path(upload_path).suffix}"
         )
         shutil.move(upload_path, analyzed_path)
-        logger.info(f"File moved to: {analyzed_path}")
 
-        # 6. Format detection results
-        detections = []
-        for result in results:
-            for box in result.boxes:
-                detections.append(
-                    f"{result.names[int(box.cls)]} ({float(box.conf) * 100:.1f}%)"
-                )
+        # Result Formatting
+        detections = [
+            f"{result.names[int(box.cls)]} ({float(box.conf) * 100:.1f}%)"
+            for result in results
+            for box in result.boxes
+        ]
 
         return {
+            "status": "success",
             "detections": detections,
             "caption": caption,
-            "processing_time": processing_time
+            "processing_time": processing_time,
+            "analyzed_path": analyzed_path
         }
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Processing failed: {str(e)}", exc_info=True)
-        raise HTTPException(500, detail=str(e))
+        logger.error("Processing error", exc_info=True)
+        raise HTTPException(500, "Internal server error")
 
 
-# === Entry Point ===
+@app.post("/vqa")
+async def vqa_endpoint(
+        option: str = Form(..., description="Must be 'blip-vqa-base'"),
+        question: str = Form(..., description="Question about the image"),
+        image: UploadFile = File(..., description="Image file")
+):
+    """Visual Question Answering endpoint"""
+    try:
+        # Input Validation
+        if option != "blip-vqa-base":
+            raise HTTPException(400, "Invalid model option")
+
+        upload_path = save_uploaded_image(image)
+        logger.info(f"VQA request received: {question}")
+
+        # Model Initialization
+        vqa_pipeline = pipeline(
+            "visual-question-answering",
+            model=MODEL_PATHS[option],
+            device=-1  # -1 for CPU, 0+ for GPU
+        )
+
+        # Inference Execution
+        start_time = time.time()
+        img = Image.open(upload_path).convert('RGB')
+        result = vqa_pipeline(question=question, image=img)
+        processing_time = round(time.time() - start_time, 2)
+
+        # File Management
+        analyzed_path = os.path.join(
+            ANALYZED_DIR,
+            f"vqa_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{Path(upload_path).name}"
+        )
+        shutil.move(upload_path, analyzed_path)
+
+        return {
+            "status": "success",
+            "answer": result[0]['answer'],
+            "processing_time": processing_time,
+            "analyzed_path": analyzed_path
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("VQA processing error", exc_info=True)
+        raise HTTPException(500, "Internal server error")
+
+
+# === Application Entry Point ===
 if __name__ == "__main__":
     import uvicorn
 

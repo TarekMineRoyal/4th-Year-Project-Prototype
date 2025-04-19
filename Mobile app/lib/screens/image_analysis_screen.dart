@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
-import '../models/processing_result.dart';
+import '../models/processing_analysis_result.dart';
 
 class ImageAnalysisScreen extends StatefulWidget {
   const ImageAnalysisScreen({super.key});
