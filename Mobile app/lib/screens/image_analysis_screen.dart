@@ -18,7 +18,7 @@ class _ImageAnalysisScreenState extends State<ImageAnalysisScreen> {
   String? _selectedOption;
   bool _isSending = false;
   final List<String> _options = ['yolov8n', 'yolov8m', 'yolov8x'];
-  ProcessingResult? _processingResult;
+  ProcessingAnalysisResult? _processingResult;
   final ImagePicker _picker = ImagePicker();
   final TextEditingController _ipController =
       TextEditingController()..text = '192.168.138.190';
@@ -86,7 +86,7 @@ class _ImageAnalysisScreenState extends State<ImageAnalysisScreen> {
       if (response.statusCode == 200) {
         final Map<String, dynamic> jsonResponse = jsonDecode(responseBody);
         setState(() {
-          _processingResult = ProcessingResult.fromJson(jsonResponse);
+          _processingResult = ProcessingAnalysisResult.fromJson(jsonResponse);
         });
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
