@@ -198,11 +198,10 @@ class _VQAScreenState extends State<VQAScreen> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                maxLines: 2,
+                maxLines: 3,
               ),
               const SizedBox(height: 20),
               Container(
-                height: 62,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Colors.blue.shade50,
@@ -213,6 +212,11 @@ class _VQAScreenState extends State<VQAScreen> {
                     _answer == null
                         ? Column(
                           children: [
+                            Icon(
+                              Icons.question_answer_outlined,
+                              size: 40,
+                              color: Colors.grey.shade500,
+                            ),
                             const SizedBox(height: 8),
                             Text(
                               'Answer will appear here',
