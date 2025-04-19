@@ -44,7 +44,7 @@ MODEL_PATHS = {
     "yolov8n": os.getenv("MODEL_YOLOv8n"),
     "yolov8m": os.getenv("MODEL_YOLOv8m"),
     "yolov8x": os.getenv("MODEL_YOLOv8x"),
-    "blip-vqa-base": "models/blip-vqa-base"
+    "blip-vqa-base": os.getenv("BILP_VQA_BASE")
 }
 
 # Hugging Face Client
