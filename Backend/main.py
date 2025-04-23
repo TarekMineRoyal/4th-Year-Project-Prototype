@@ -1,5 +1,8 @@
 # === Imports ===
 # Standard Library
+import base64
+import requests
+import json
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -44,7 +47,8 @@ MODEL_PATHS = {
     "yolov8n": os.getenv("MODEL_YOLOv8n"),
     "yolov8m": os.getenv("MODEL_YOLOv8m"),
     "yolov8x": os.getenv("MODEL_YOLOv8x"),
-    "blip-vqa-base": os.getenv("BILP_VQA_BASE")
+    "blip-vqa-base": os.getenv("BILP_VQA_BASE"),
+    "llava": os.getenv("LLAVA")
 }
 
 # Hugging Face Client
@@ -90,7 +94,6 @@ def save_uploaded_image(image: UploadFile) -> str:
 
     return save_path
 
-
 # === API Endpoints ===
 @app.post("/upload")
 async def upload_image(
@@ -99,21 +102,17 @@ async def upload_image(
 ):
     """Object detection and image captioning endpoint"""
     try:
-        # Image Validation & Storage
         upload_path = save_uploaded_image(image)
         logger.info(f"Image received: {upload_path}")
 
-        # Model Execution
         model = model_type_loader(option)
         img = Image.open(upload_path).convert('RGB')
 
-        # Object Detection
         start_time = time.time()
         results = model(img)
         processing_time = round(time.time() - start_time, 2)
         logger.info(f"Detection completed in {processing_time}s")
 
-        # Caption Generation
         try:
             with open(upload_path, "rb") as f:
                 caption = client.image_to_text(
@@ -124,14 +123,12 @@ async def upload_image(
             logger.warning("Caption generation failed", exc_info=True)
             caption = "Caption unavailable"
 
-        # File Management
         analyzed_path = os.path.join(
             ANALYZED_DIR,
             f"analyzed_{datetime.now().strftime('%Y%m%d_%H%M%S')}{Path(upload_path).suffix}"
         )
         shutil.move(upload_path, analyzed_path)
 
-        # Result Formatting
         detections = [
             f"{result.names[int(box.cls)]} ({float(box.conf) * 100:.1f}%)"
             for result in results
@@ -155,33 +152,51 @@ async def upload_image(
 
 @app.post("/vqa")
 async def vqa_endpoint(
-        option: str = Form(..., description="Must be 'blip-vqa-base'"),
+        option: str = Form(..., description="Model type ('blip-vqa-base' or 'llava')"),
         question: str = Form(..., description="Question about the image"),
         image: UploadFile = File(..., description="Image file")
 ):
     """Visual Question Answering endpoint"""
     try:
-        # Input Validation
-        if option != "blip-vqa-base":
-            raise HTTPException(400, "Invalid model option")
-
+        # To be removed later:
+        if option == "vqa_model_2": option = "llava"
         upload_path = save_uploaded_image(image)
         logger.info(f"VQA request received: {question}")
 
-        # Model Initialization
-        vqa_pipeline = pipeline(
-            "visual-question-answering",
-            model=MODEL_PATHS[option],
-            device=-1  # -1 for CPU, 0+ for GPU
-        )
+        if option == "blip-vqa-base":
+            vqa_pipeline = pipeline(
+                "visual-question-answering",
+                model=MODEL_PATHS[option],
+                device=-1
+            )
+            img = Image.open(upload_path).convert('RGB')
+            start_time = time.time()
+            result = vqa_pipeline(question=question, image=img)
+            processing_time = round(time.time() - start_time, 2)
+            answer = result[0]['answer']
 
-        # Inference Execution
-        start_time = time.time()
-        img = Image.open(upload_path).convert('RGB')
-        result = vqa_pipeline(question=question, image=img)
-        processing_time = round(time.time() - start_time, 2)
+        elif option == "llava":
+            with open(upload_path, "rb") as image_file:
+                image_base64 = base64.b64encode(image_file.read()).decode('utf-8')
+            prompt = f"{question}"
 
-        # File Management
+            start_time = time.time()
+            ollama_url = "http://localhost:11434/api/generate"
+            payload = {
+                "model": "llava",
+                "prompt": prompt,
+                "stream": False,
+                "images": [image_base64]
+            }
+
+            response = requests.post(ollama_url, data=json.dumps(payload))
+            response.raise_for_status()
+            processing_time = round(time.time() - start_time, 2)
+            answer = response.json().get("response", "No answer received")
+
+        else:
+            raise HTTPException(400, "Invalid model option")
+
         analyzed_path = os.path.join(
             ANALYZED_DIR,
             f"vqa_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{Path(upload_path).name}"
@@ -190,11 +205,14 @@ async def vqa_endpoint(
 
         return {
             "status": "success",
-            "answer": result[0]['answer'],
+            "answer": answer,
             "processing_time": processing_time,
             "analyzed_path": analyzed_path
         }
 
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Ollama API error: {str(e)}")
+        raise HTTPException(503, "Llava model service unavailable")
     except HTTPException:
         raise
     except Exception as e:
