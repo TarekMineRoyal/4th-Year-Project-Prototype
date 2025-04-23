@@ -36,7 +36,13 @@ class _VQAScreenState extends State<VQAScreen> {
   File? _selectedImage;
   String? _selectedOption;
   bool _isSending = false;
-  final List<String> _options = ['blip-vqa-base', 'vqa_model_2'];
+  final List<String> _options = [
+    'blip-vqa-base',
+    'llava',
+    'bakllava',
+    'moondream',
+    'chat-gph-vision',
+  ];
   String? _answer;
   double? _processingTime;
   final ImagePicker _picker = ImagePicker();

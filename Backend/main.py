@@ -48,7 +48,10 @@ MODEL_PATHS = {
     "yolov8m": os.getenv("MODEL_YOLOv8m"),
     "yolov8x": os.getenv("MODEL_YOLOv8x"),
     "blip-vqa-base": os.getenv("BILP_VQA_BASE"),
-    "llava": os.getenv("LLAVA")
+    "llava": os.getenv("LLAVA"),
+    "bakllava" : os.getenv("BAKLLAVA"),
+    "moondream" : os.getenv("MOONDREAM"),
+    "chat-gph-vision" : os.getenv("GPH_VISION"),
 }
 
 # Hugging Face Client
@@ -175,7 +178,10 @@ async def vqa_endpoint(
             processing_time = round(time.time() - start_time, 2)
             answer = result[0]['answer']
 
-        elif option == "llava":
+        elif option == "llava" or option == "bakllava" or option == "moondream" or option == "chat-gph-vision":
+            if option == "chat-gph-vision": model = "mskimomadto/chat-gph-vision"
+            else: model = option
+            logger.info(f"Model used: {model}")
             with open(upload_path, "rb") as image_file:
                 image_base64 = base64.b64encode(image_file.read()).decode('utf-8')
             prompt = f"{question}"
@@ -183,7 +189,7 @@ async def vqa_endpoint(
             start_time = time.time()
             ollama_url = "http://localhost:11434/api/generate"
             payload = {
-                "model": "llava",
+                "model": model,
                 "prompt": prompt,
                 "stream": False,
                 "images": [image_base64]
