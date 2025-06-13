@@ -5,24 +5,12 @@ import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
-void main() {
-  runApp(const MyApp());
-}
+// A simple class to hold our model options
+class VqaModelOption {
+  final String displayName; // What the user sees
+  final String apiName; // What we send to the backend
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'VQA Demo',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        visualDensity: VisualDensity.adaptivePlatformDensity,
-      ),
-      home: const VQAScreen(),
-    );
-  }
+  VqaModelOption({required this.displayName, required this.apiName});
 }
 
 class VQAScreen extends StatefulWidget {
@@ -34,21 +22,37 @@ class VQAScreen extends StatefulWidget {
 
 class _VQAScreenState extends State<VQAScreen> {
   File? _selectedImage;
-  String? _selectedOption;
+  VqaModelOption? _selectedOption; // Changed to our new class
   bool _isSending = false;
-  final List<String> _options = [
-    'blip-vqa-base',
-    'llava',
-    'bakllava',
-    'moondream',
-    'chat-gph-vision',
+
+  // Updated list of model options with user-friendly names
+  final List<VqaModelOption> _options = [
+    VqaModelOption(
+      displayName: 'Gemini 1.5 (Fast & Stable)',
+      apiName: 'gemini-1.5-flash-latest',
+    ),
+    VqaModelOption(
+      displayName: 'Gemini 2.5 (Advanced Preview)',
+      apiName: 'gemini-2.5-flash-preview-05-20',
+    ),
+    VqaModelOption(displayName: 'Llava (Offline Failsafe)', apiName: 'llava'),
   ];
+
   String? _answer;
   double? _processingTime;
   final ImagePicker _picker = ImagePicker();
   final TextEditingController _ipController =
-      TextEditingController()..text = '192.168.138.190';
+      TextEditingController()..text = '10.0.2.2'; // Example IP
   final TextEditingController _questionController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Set a default model selection
+    if (_options.isNotEmpty) {
+      _selectedOption = _options[0];
+    }
+  }
 
   Future<void> _pickImage(ImageSource source) async {
     try {
@@ -99,7 +103,8 @@ class _VQAScreenState extends State<VQAScreen> {
         'POST',
         Uri.parse('http://${_ipController.text}:8000/vqa'),
       );
-      request.fields['option'] = _selectedOption!;
+      // Send the apiName to the backend
+      request.fields['option'] = _selectedOption!.apiName;
       request.fields['question'] = _questionController.text;
 
       final fileExt = _selectedImage!.path.split('.').last.toLowerCase();
@@ -127,7 +132,11 @@ class _VQAScreenState extends State<VQAScreen> {
         });
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Analysis failed (${response.statusCode})')),
+          SnackBar(
+            content: Text(
+              'Analysis failed (${response.statusCode}): $responseBody',
+            ),
+          ),
         );
       }
     } catch (e) {
@@ -258,7 +267,8 @@ class _VQAScreenState extends State<VQAScreen> {
                         ),
               ),
               const SizedBox(height: 20),
-              DropdownButtonFormField<String>(
+              // Updated Dropdown to use the new class and user-friendly names
+              DropdownButtonFormField<VqaModelOption>(
                 decoration: InputDecoration(
                   labelText: 'Select VQA model',
                   border: OutlineInputBorder(
@@ -271,7 +281,7 @@ class _VQAScreenState extends State<VQAScreen> {
                         .map(
                           (option) => DropdownMenuItem(
                             value: option,
-                            child: Text(option),
+                            child: Text(option.displayName),
                           ),
                         )
                         .toList(),
