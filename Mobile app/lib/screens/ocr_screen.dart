@@ -6,55 +6,23 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
-// A simple class to hold our model options
-class VqaModelOption {
-  final String displayName; // What the user sees
-  final String apiName; // What we send to the backend
-
-  VqaModelOption({required this.displayName, required this.apiName});
-}
-
-class VQAScreen extends StatefulWidget {
-  const VQAScreen({super.key});
+class OCRScreen extends StatefulWidget {
+  const OCRScreen({super.key});
 
   @override
-  State<VQAScreen> createState() => _VQAScreenState();
+  State<OCRScreen> createState() => _OCRScreenState();
 }
 
-class _VQAScreenState extends State<VQAScreen> {
+class _OCRScreenState extends State<OCRScreen> {
   File? _selectedImage;
-  VqaModelOption? _selectedOption; // Changed to our new class
   bool _isSending = false;
   final FlutterTts flutterTts = FlutterTts();
 
-  // Updated list of model options with user-friendly names
-  final List<VqaModelOption> _options = [
-    VqaModelOption(
-      displayName: 'Gemini 1.5 (Fast & Stable)',
-      apiName: 'gemini-1.5-flash-latest',
-    ),
-    VqaModelOption(
-      displayName: 'Gemini 2.5 (Advanced Preview)',
-      apiName: 'gemini-2.5-flash-preview-05-20',
-    ),
-    VqaModelOption(displayName: 'Llava (Offline Failsafe)', apiName: 'llava'),
-  ];
-
-  String? _answer;
+  String? _extractedText;
   double? _processingTime;
   final ImagePicker _picker = ImagePicker();
   final TextEditingController _ipController =
       TextEditingController()..text = '10.0.2.2'; // Example IP
-  final TextEditingController _questionController = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    // Set a default model selection
-    if (_options.isNotEmpty) {
-      _selectedOption = _options[0];
-    }
-  }
 
   Future<void> _pickImage(ImageSource source) async {
     try {
@@ -63,7 +31,7 @@ class _VQAScreenState extends State<VQAScreen> {
       if (pickedFile != null) {
         setState(() {
           _selectedImage = File(pickedFile.path);
-          _answer = null;
+          _extractedText = null;
           _processingTime = null;
         });
       }
@@ -76,10 +44,10 @@ class _VQAScreenState extends State<VQAScreen> {
   }
 
   Future<void> _sendForAnalysis() async {
-    if (_selectedImage == null || _selectedOption == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select image and model')),
-      );
+    if (_selectedImage == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Please select an image')));
       return;
     }
     if (_ipController.text.isEmpty) {
@@ -88,26 +56,17 @@ class _VQAScreenState extends State<VQAScreen> {
       );
       return;
     }
-    if (_questionController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your question')),
-      );
-      return;
-    }
 
     setState(() {
       _isSending = true;
-      _answer = null;
+      _extractedText = null;
     });
 
     try {
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('http://${_ipController.text}:8000/vqa'),
+        Uri.parse('http://${_ipController.text}:8000/ocr'),
       );
-      // Send the apiName to the backend
-      request.fields['option'] = _selectedOption!.apiName;
-      request.fields['question'] = _questionController.text;
 
       final fileExt = _selectedImage!.path.split('.').last.toLowerCase();
       final contentType =
@@ -129,10 +88,10 @@ class _VQAScreenState extends State<VQAScreen> {
       if (response.statusCode == 200) {
         final Map<String, dynamic> jsonResponse = jsonDecode(responseBody);
         setState(() {
-          _answer = jsonResponse['answer'];
+          _extractedText = jsonResponse['text'];
           _processingTime = jsonResponse['processing_time'].toDouble();
         });
-        flutterTts.speak(_answer!);
+        flutterTts.speak(_extractedText!);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -156,7 +115,7 @@ class _VQAScreenState extends State<VQAScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Visual Question Answering'),
+        title: const Text('Text Reader (OCR)'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
@@ -208,36 +167,25 @@ class _VQAScreenState extends State<VQAScreen> {
                         ),
               ),
               const SizedBox(height: 20),
-              TextField(
-                controller: _questionController,
-                decoration: InputDecoration(
-                  labelText: 'Your question',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                maxLines: 3,
-              ),
-              const SizedBox(height: 20),
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
+                  color: Colors.green.shade50,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.blue.shade100),
+                  border: Border.all(color: Colors.green.shade100),
                 ),
                 child:
-                    _answer == null
+                    _extractedText == null
                         ? Column(
                           children: [
                             Icon(
-                              Icons.question_answer_outlined,
+                              Icons.text_fields_rounded,
                               size: 40,
                               color: Colors.grey.shade500,
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'Answer will appear here',
+                              'Extracted text will appear here',
                               style: TextStyle(color: Colors.grey.shade600),
                             ),
                           ],
@@ -246,16 +194,16 @@ class _VQAScreenState extends State<VQAScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Answer:',
+                              'Extracted Text:',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
-                                color: Theme.of(context).primaryColor,
+                                color: Colors.green.shade800,
                               ),
                             ),
                             const SizedBox(height: 12),
                             Text(
-                              _answer!,
+                              _extractedText!,
                               style: const TextStyle(fontSize: 14),
                             ),
                             const SizedBox(height: 12),
@@ -270,30 +218,11 @@ class _VQAScreenState extends State<VQAScreen> {
                         ),
               ),
               const SizedBox(height: 20),
-              // Updated Dropdown to use the new class and user-friendly names
-              DropdownButtonFormField<VqaModelOption>(
-                decoration: InputDecoration(
-                  labelText: 'Select VQA model',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                value: _selectedOption,
-                items:
-                    _options
-                        .map(
-                          (option) => DropdownMenuItem(
-                            value: option,
-                            child: Text(option.displayName),
-                          ),
-                        )
-                        .toList(),
-                onChanged: (value) => setState(() => _selectedOption = value),
-              ),
-              const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: _isSending ? null : _sendForAnalysis,
                 style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -304,9 +233,12 @@ class _VQAScreenState extends State<VQAScreen> {
                         ? const SizedBox(
                           height: 24,
                           width: 24,
-                          child: CircularProgressIndicator(strokeWidth: 3),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 3,
+                            color: Colors.white,
+                          ),
                         )
-                        : const Text('GET ANSWER'),
+                        : const Text('EXTRACT TEXT'),
               ),
               const SizedBox(height: 20),
               Row(

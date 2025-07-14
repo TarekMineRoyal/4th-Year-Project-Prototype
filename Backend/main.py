@@ -147,6 +147,51 @@ Follow these rules for every response:
         logger.error(f"VQA processing error: {e}", exc_info=True)
         raise HTTPException(500, "Internal server error")
 
+# Add this new endpoint to your Backend/main.py file
+
+@app.post("/ocr")
+async def ocr_endpoint(
+        image: UploadFile = File(..., description="Image file with text")
+):
+    """Optical Character Recognition endpoint"""
+    upload_path = save_uploaded_image(image)
+    logger.info("OCR request received")
+
+    prompt = "Extract all text from this image exactly as it appears. If there is no text, say so."
+    text_response = ""
+    processing_time = 0.0
+
+    try:
+        img = None
+        try:
+            img = Image.open(upload_path)
+            start_time = time.time()
+
+            # Use the same Gemini model you use for VQA
+            model = genai.GenerativeModel('gemini-2.5-flash-preview-05-20')
+            response = model.generate_content([prompt, img])
+
+            processing_time = round(time.time() - start_time, 2)
+            text_response = response.text
+        finally:
+            if img:
+                img.close()  # Ensure the image file is closed
+
+        # Move the analyzed file
+        analyzed_path = os.path.join(
+            ANALYZED_DIR,
+            f"ocr_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{Path(upload_path).name}"
+        )
+        shutil.move(upload_path, analyzed_path)
+
+        return {
+            "status": "success",
+            "text": text_response,
+            "processing_time": processing_time
+        }
+    except Exception as e:
+        logger.error(f"OCR processing error: {e}", exc_info=True)
+        raise HTTPException(500, "Internal server error")
 
 # === Application Entry Point ===
 if __name__ == "__main__":

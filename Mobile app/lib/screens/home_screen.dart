@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'image_analysis_screen.dart';
+import 'ocr_screen.dart';
 import 'vqa_screen.dart';
+import 'video_analysis_screen.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -41,22 +42,34 @@ class HomePage extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _buildFeatureCard(
-                context,
-                Icons.image_search_rounded,
-                'Image Analysis',
-                'Object detection & image captioning',
-                const ImageAnalysisScreen(),
-                Colors.blue,
-              ),
-              const SizedBox(height: 30),
+              // Card for the Interactive Scene Explorer (VQA)
               _buildFeatureCard(
                 context,
                 Icons.question_answer_rounded,
-                'Visual Q&A',
-                'Ask questions about images',
+                'Interactive Scene Explorer',
+                'Ask questions about your surroundings',
                 const VQAScreen(),
+                Colors.blue,
+              ),
+              const SizedBox(height: 30),
+              // Card for the Text Reader (OCR)
+              _buildFeatureCard(
+                context,
+                Icons.text_fields_rounded,
+                'Text Reader',
+                'Read text from signs and documents',
+                const OCRScreen(),
                 Colors.green,
+              ),
+              const SizedBox(height: 30),
+              // Card for the Video analysis
+              _buildFeatureCard(
+                context,
+                Icons.videocam_rounded, // New Icon
+                'Live Scene Analysis', // New Title
+                'Analyze your surroundings in real-time', // New Subtitle
+                const VideoAnalysisScreen(), // Navigate to the new screen
+                Colors.purple, // New Color
               ),
             ],
           ),
