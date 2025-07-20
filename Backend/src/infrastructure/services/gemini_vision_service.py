@@ -1,12 +1,15 @@
 import time
-import logging
-from PIL import Image
 import io
+import structlog
+from PIL import Image
 from fastapi import HTTPException
 import google.generativeai as genai
 
 from src.application.services.vision_service import VisionService
 from src.domain.entities import ImageFile, AnalysisResult
+
+# Get a logger instance for this module
+logger = structlog.get_logger(__name__)
 
 
 class GeminiVisionService(VisionService):
@@ -28,11 +31,15 @@ class GeminiVisionService(VisionService):
         """
         Analyzes an image using the specified Gemini model.
         """
-        logging.info(f"Sending request to Gemini model: {model_option}")
+        logger.info(
+            "Attempting to analyze image with Gemini.",
+            model_option=model_option
+        )
 
         # We handle Llava as an exception for now, but in a real scenario,
         # it would have its own service implementation.
         if model_option == "llava":
+            logger.warning("Unsupported model requested.", model_option="llava")
             raise HTTPException(status_code=400, detail="Llava model is not supported in this service.")
 
         try:
@@ -41,12 +48,17 @@ class GeminiVisionService(VisionService):
 
             start_time = time.time()
 
+            logger.debug("Sending request to Gemini API.")
             model = genai.GenerativeModel(model_option)
             response = model.generate_content([prompt, img])
 
             processing_time = round(time.time() - start_time, 2)
 
-            logging.info(f"Received response from Gemini in {processing_time}s.")
+            logger.info(
+                "Received response from Gemini successfully.",
+                processing_time=processing_time,
+                response_length=len(response.text)
+            )
 
             return AnalysisResult(
                 text=response.text,
@@ -54,5 +66,8 @@ class GeminiVisionService(VisionService):
             )
 
         except Exception as e:
-            logging.error(f"Error communicating with Gemini API: {e}", exc_info=True)
+            # logger.exception will automatically include stack trace info
+            logger.exception("Error communicating with Gemini API.")
+            # We still raise an HTTPException to give a clean error to the user.
+            # The detailed error is now in our logs.
             raise HTTPException(status_code=500, detail=f"An error occurred with the vision model: {str(e)}")
