@@ -65,7 +65,7 @@ class _OCRScreenState extends State<OCRScreen> {
     try {
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('http://${_ipController.text}:8000/ocr'),
+        Uri.parse('http://${_ipController.text}:8000/api/v1/ocr/'),
       );
 
       final fileExt = _selectedImage!.path.split('.').last.toLowerCase();

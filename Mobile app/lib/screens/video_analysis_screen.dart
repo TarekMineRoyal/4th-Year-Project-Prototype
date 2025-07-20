@@ -89,7 +89,6 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
   }
 
   Future<void> _analyzeFrame() async {
-    // --- UPDATED: Guard clause now checks if speaking ---
     if (_controller == null ||
         !_controller!.value.isInitialized ||
         _isProcessingFrame ||
@@ -102,19 +101,11 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
     try {
       final XFile imageFile = await _controller!.takePicture();
 
-      // --- NEW: Stateful Prompt Engineering ---
-      final prompt = """
-      You are describing a video feed for a visually impaired user.
-      The previous description was: '$_previousSceneDescription'.
-      Based on the new frame, describe only what is new or what has changed in the scene.
-      Be very concise. If nothing significant has changed, do not respond at all.
-      """;
-
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('http://${_ipController.text}:8000/vqa'),
+        Uri.parse('http://${_ipController.text}:8000/api/v1/video/'),
       );
-      request.fields['question'] = prompt;
+      request.fields['previous_scene_description'] = _previousSceneDescription;
       request.fields['option'] = 'gemini-2.5-flash-preview-05-20';
       request.files.add(
         await http.MultipartFile.fromPath(
@@ -130,10 +121,11 @@ class _VideoAnalysisScreenState extends State<VideoAnalysisScreen> {
         final Map<String, dynamic> jsonResponse = jsonDecode(responseBody);
         final String answer = jsonResponse['answer'].trim();
 
-        // --- NEW: Logic to handle "None" response ---
-        if (answer.toLowerCase() != 'none' && answer.isNotEmpty) {
+        // --- CORRECTED LOGIC ---
+        // Only speak and update memory if the response is NOT the keyword.
+        if (answer != 'NO_CHANGE' && answer.isNotEmpty) {
           _flutterTts.speak(answer);
-          // Update the memory with the new description
+          // This now only happens when there is a new description.
           _previousSceneDescription = answer;
         }
       }

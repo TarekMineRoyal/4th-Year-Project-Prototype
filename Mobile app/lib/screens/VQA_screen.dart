@@ -103,7 +103,7 @@ class _VQAScreenState extends State<VQAScreen> {
     try {
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('http://${_ipController.text}:8000/vqa'),
+        Uri.parse('http://${_ipController.text}:8000/api/v1/vqa/'),
       );
       // Send the apiName to the backend
       request.fields['option'] = _selectedOption!.apiName;
