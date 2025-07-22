@@ -3,7 +3,7 @@
 import 'dart:convert';
 import '../models/video_analysis_result.dart';
 import 'package:http/http.dart' as http;
-import 'package:http_parser/http_parser.dart'; // <-- Import this
+import 'package:http_parser/http_parser.dart';
 
 import '../models/vqa_result.dart';
 import '../models/ocr_result.dart';
@@ -31,22 +31,23 @@ class ApiService {
     return await http.MultipartFile.fromPath(
       'image',
       path,
-      contentType: contentType, // <-- The fix is applied here
+      contentType: contentType,
     );
   }
 
+  // --- UPDATED VQA METHOD ---
   Future<VqaResult> getVqaResult(
     String imagePath,
     String question,
-    String modelOption,
+    // The "modelOption" parameter is REMOVED.
   ) async {
     final baseUrl = await _getBaseUrl();
     var uri = Uri.parse('$baseUrl/vqa/');
     var request =
         http.MultipartRequest('POST', uri)
           ..fields['question'] = question
-          ..fields['option'] = modelOption
-          ..files.add(await _createImageFile(imagePath)); // <-- Use the helper
+          // The "option" field is REMOVED from the request.
+          ..files.add(await _createImageFile(imagePath));
 
     var response = await request.send();
 
@@ -61,13 +62,14 @@ class ApiService {
     }
   }
 
-  Future<OcrResult> getOcrResult(String imagePath, String modelOption) async {
+  // --- OCR and Video Analysis methods are unchanged for now ---
+  Future<OcrResult> getOcrResult(String imagePath) async {
+    // The "modelOption" parameter is REMOVED.
     final baseUrl = await _getBaseUrl();
     var uri = Uri.parse('$baseUrl/ocr/');
-    var request =
-        http.MultipartRequest('POST', uri)
-          ..fields['option'] = modelOption
-          ..files.add(await _createImageFile(imagePath)); // <-- Use the helper
+    var request = http.MultipartRequest('POST', uri)
+      // The "option" field is REMOVED from the request.
+      ..files.add(await _createImageFile(imagePath));
 
     var response = await request.send();
 
@@ -85,15 +87,15 @@ class ApiService {
   Future<VideoAnalysisResult> getVideoAnalysisResult(
     String imagePath,
     String previousDescription,
-    String modelOption,
+    // The "modelOption" parameter is REMOVED.
   ) async {
     final baseUrl = await _getBaseUrl();
-    var uri = Uri.parse('$baseUrl/video/'); // <-- Corrected endpoint
+    var uri = Uri.parse('$baseUrl/video/');
     var request =
         http.MultipartRequest('POST', uri)
           ..fields['previous_scene_description'] = previousDescription
-          ..fields['option'] = modelOption
-          ..files.add(await _createImageFile(imagePath)); // <-- Use the helper
+          // The "option" field is REMOVED from the request.
+          ..files.add(await _createImageFile(imagePath));
 
     var response = await request.send();
 

@@ -6,6 +6,7 @@ class VideoAnalysisRequest(BaseModel):
     """
     Input model for the video analysis use case.
     """
+    model_option: str
     previous_scene_description: str
     image: ImageFile
 

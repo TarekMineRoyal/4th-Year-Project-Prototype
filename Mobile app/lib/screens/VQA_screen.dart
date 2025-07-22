@@ -10,7 +10,7 @@ class VQAScreen extends StatefulWidget {
   const VQAScreen({super.key});
 
   @override
-  _VQAScreenState createState() => _VQAScreenState();
+  State<VQAScreen> createState() => _VQAScreenState();
 }
 
 class _VQAScreenState extends State<VQAScreen> {
@@ -18,6 +18,8 @@ class _VQAScreenState extends State<VQAScreen> {
   final ImagePicker _picker = ImagePicker();
   File? _image;
 
+  // This is UI-level logic to handle picking an image and updating the local state.
+  // It's appropriate to keep it here in the State class.
   Future<void> _pickImage() async {
     try {
       final pickedFile = await _picker.pickImage(source: ImageSource.camera);
@@ -27,12 +29,14 @@ class _VQAScreenState extends State<VQAScreen> {
         });
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text("Failed to pick image: $e")));
     }
   }
 
+  // This method delegates the business logic to the ViewModel.
   void _getAnswer() {
     if (_image == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -61,8 +65,6 @@ class _VQAScreenState extends State<VQAScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final vqaViewModel = context.watch<VqaViewModel>();
-
     return Scaffold(
       appBar: AppBar(
         title: const Text("Visual Question Answering"),
@@ -75,109 +77,113 @@ class _VQAScreenState extends State<VQAScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(
-                height: 250,
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade400),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child:
-                    _image == null
-                        ? const Center(child: Text("No image selected."))
-                        : ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.file(_image!, fit: BoxFit.cover),
-                        ),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: _pickImage,
-                icon: const Icon(Icons.camera_alt),
-                label: const Text("Take Picture"),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-              ),
+              // Use private builder methods to keep the build method clean.
+              _buildImagePicker(),
               const SizedBox(height: 24),
-
-              // --- ADDED ---
-              // Dropdown for selecting the AI model.
-              // This is the UI counterpart to the logic we added in the ViewModel.
-              DropdownButtonFormField<String>(
-                value: vqaViewModel.selectedModel,
-                items: const [
-                  DropdownMenuItem(
-                    value: 'gemini-1.5-flash-latest',
-                    child: Text('Gemini (Online)'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'llava',
-                    child: Text('Llava (Offline)'),
-                  ),
-                ],
-                onChanged: (value) {
-                  if (value != null) {
-                    // Use context.read to call the state update method
-                    // without causing a rebuild here.
-                    context.read<VqaViewModel>().setModel(value);
-                  }
-                },
-                decoration: const InputDecoration(
-                  labelText: 'Select AI Model',
-                  border: OutlineInputBorder(),
-                ),
-              ),
+              _buildQuestionInput(),
               const SizedBox(height: 16),
-
-              // --- END ADDED SECTION ---
-              TextField(
-                controller: _questionController,
-                decoration: const InputDecoration(
-                  labelText: "Ask a question about the scene",
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: vqaViewModel.isLoading ? null : _getAnswer,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                ),
-                child: const Text("Get Answer"),
-              ),
+              _buildSubmitButton(),
               const SizedBox(height: 30),
-              if (vqaViewModel.isLoading)
-                const Center(child: CircularProgressIndicator())
-              else if (vqaViewModel.errorMessage != null)
-                Center(
-                  child: Text(
-                    "Error: ${vqaViewModel.errorMessage}",
-                    style: const TextStyle(color: Colors.red, fontSize: 16),
-                    textAlign: TextAlign.center,
-                  ),
-                )
-              else if (vqaViewModel.vqaResult != null)
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    "Answer: ${vqaViewModel.vqaResult!.answer}",
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
+              _buildResultDisplay(),
             ],
           ),
         ),
       ),
     );
+  }
+
+  // Widget for displaying the image and the button to take a picture.
+  Widget _buildImagePicker() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          height: 250,
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade400),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child:
+              _image == null
+                  ? const Center(child: Text("No image selected."))
+                  : ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.file(_image!, fit: BoxFit.cover),
+                  ),
+        ),
+        const SizedBox(height: 16),
+        ElevatedButton.icon(
+          onPressed: _pickImage,
+          icon: const Icon(Icons.camera_alt),
+          label: const Text("Take Picture"),
+          style: ElevatedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Widget for the question text field.
+  Widget _buildQuestionInput() {
+    return TextField(
+      controller: _questionController,
+      decoration: const InputDecoration(
+        labelText: "Ask a question about the scene",
+        border: OutlineInputBorder(),
+      ),
+    );
+  }
+
+  // Widget for the submit button.
+  Widget _buildSubmitButton() {
+    // Listen to only the isLoading state for this button.
+    final isLoading = context.select((VqaViewModel vm) => vm.isLoading);
+    return ElevatedButton(
+      onPressed: isLoading ? null : _getAnswer,
+      style: ElevatedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        backgroundColor: Colors.blue,
+        foregroundColor: Colors.white,
+      ),
+      child: const Text("Get Answer"),
+    );
+  }
+
+  // Widget to display the result, loading indicator, or an error message.
+  Widget _buildResultDisplay() {
+    final vqaViewModel = context.watch<VqaViewModel>();
+
+    if (vqaViewModel.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (vqaViewModel.errorMessage != null) {
+      return Center(
+        child: Text(
+          "Error: ${vqaViewModel.errorMessage}",
+          style: const TextStyle(color: Colors.red, fontSize: 16),
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+
+    if (vqaViewModel.vqaResult != null) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.blue.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          "Answer: ${vqaViewModel.vqaResult!.answer}",
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+
+    // Return an empty container if there's no result, error, or loading state.
+    return const SizedBox.shrink();
   }
 }

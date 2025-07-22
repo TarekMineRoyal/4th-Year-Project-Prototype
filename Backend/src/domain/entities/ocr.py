@@ -6,6 +6,7 @@ class OCRRequest(BaseModel):
     """
     Input model for the OCR use case.
     """
+    model_option: str
     image: ImageFile
 
 class OCRResult(BaseModel):

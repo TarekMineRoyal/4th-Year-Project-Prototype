@@ -16,22 +16,22 @@ class VideoAnalysisViewModel extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
-  // Method to fetch the next scene analysis
   Future<void> analyzeNextFrame(String imagePath) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
+      // The API call is simplified, as intended.
       final result = await _apiService.getVideoAnalysisResult(
         imagePath,
         _previousSceneDescription,
-        'gemini-2.5-flash-lite-preview-06-17',
       );
 
       _analysisResult = result;
 
-      // CRITICAL STEP: Update the memory only if a significant change was described.
+      // CORRECTED LOGIC: This uses the fields from your actual VideoAnalysisResult model.
+      // It updates the memory only when a significant change is reported by the backend.
       if (result.hasChanged && result.descriptionOfChange.isNotEmpty) {
         _previousSceneDescription = result.descriptionOfChange;
       }
@@ -43,7 +43,6 @@ class VideoAnalysisViewModel extends ChangeNotifier {
     }
   }
 
-  // Method to clear the memory when the user stops the live analysis
   void resetSceneMemory() {
     _previousSceneDescription = "";
     _analysisResult = null;

@@ -18,10 +18,12 @@ class OcrViewModel extends ChangeNotifier {
   Future<void> fetchOcrResult(String imagePath) async {
     _isLoading = true;
     _errorMessage = null;
+    _ocrResult = null; // Clear previous results before the new request
     notifyListeners();
 
     try {
-      _ocrResult = await _apiService.getOcrResult(imagePath, 'gemini-2.5-pro');
+      // The call is now simplified and no longer sends a model name.
+      _ocrResult = await _apiService.getOcrResult(imagePath);
     } catch (e) {
       _errorMessage = e.toString();
     } finally {
