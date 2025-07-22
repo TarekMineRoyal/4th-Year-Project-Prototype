@@ -61,11 +61,13 @@ class ApiService {
     }
   }
 
-  Future<OcrResult> getOcrResult(String imagePath) async {
+  Future<OcrResult> getOcrResult(String imagePath, String modelOption) async {
     final baseUrl = await _getBaseUrl();
     var uri = Uri.parse('$baseUrl/ocr/');
-    var request = http.MultipartRequest('POST', uri)
-      ..files.add(await _createImageFile(imagePath)); // <-- Use the helper
+    var request =
+        http.MultipartRequest('POST', uri)
+          ..fields['option'] = modelOption
+          ..files.add(await _createImageFile(imagePath)); // <-- Use the helper
 
     var response = await request.send();
 
@@ -83,12 +85,14 @@ class ApiService {
   Future<VideoAnalysisResult> getVideoAnalysisResult(
     String imagePath,
     String previousDescription,
+    String modelOption,
   ) async {
     final baseUrl = await _getBaseUrl();
     var uri = Uri.parse('$baseUrl/video/'); // <-- Corrected endpoint
     var request =
         http.MultipartRequest('POST', uri)
           ..fields['previous_scene_description'] = previousDescription
+          ..fields['option'] = modelOption
           ..files.add(await _createImageFile(imagePath)); // <-- Use the helper
 
     var response = await request.send();

@@ -26,6 +26,7 @@ class VideoAnalysisViewModel extends ChangeNotifier {
       final result = await _apiService.getVideoAnalysisResult(
         imagePath,
         _previousSceneDescription,
+        'gemini-2.5-flash-lite-preview-06-17',
       );
 
       _analysisResult = result;

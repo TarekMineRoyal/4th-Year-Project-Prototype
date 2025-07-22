@@ -12,7 +12,7 @@ class VqaViewModel extends ChangeNotifier {
   String? _errorMessage;
   // --- ADDED ---
   // State for the selected AI model. Defaults to Gemini.
-  String _selectedModel = 'gemini-1.5-flash-latest';
+  String _selectedModel = 'gemini-2.5-flash'; //'gemini-1.5-flash-latest';
 
   VqaResult? get vqaResult => _vqaResult;
   bool get isLoading => _isLoading;

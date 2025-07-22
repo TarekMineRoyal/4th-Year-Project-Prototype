@@ -21,7 +21,7 @@ class OcrViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _ocrResult = await _apiService.getOcrResult(imagePath);
+      _ocrResult = await _apiService.getOcrResult(imagePath, 'gemini-2.5-pro');
     } catch (e) {
       _errorMessage = e.toString();
     } finally {
