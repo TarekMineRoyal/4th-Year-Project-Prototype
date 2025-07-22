@@ -1,347 +1,179 @@
+// lib/screens/vqa_screen.dart
+
 import 'dart:io';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:http/http.dart' as http;
-import 'package:http_parser/http_parser.dart';
-import 'package:flutter_tts/flutter_tts.dart';
-
-// A simple class to hold our model options
-class VqaModelOption {
-  final String displayName; // What the user sees
-  final String apiName; // What we send to the backend
-
-  VqaModelOption({required this.displayName, required this.apiName});
-}
+import 'package:provider/provider.dart';
+import '../viewmodels/vqa_viewmodel.dart';
 
 class VQAScreen extends StatefulWidget {
   const VQAScreen({super.key});
 
   @override
-  State<VQAScreen> createState() => _VQAScreenState();
+  _VQAScreenState createState() => _VQAScreenState();
 }
 
 class _VQAScreenState extends State<VQAScreen> {
-  File? _selectedImage;
-  VqaModelOption? _selectedOption; // Changed to our new class
-  bool _isSending = false;
-  final FlutterTts flutterTts = FlutterTts();
-
-  // Updated list of model options with user-friendly names
-  final List<VqaModelOption> _options = [
-    VqaModelOption(
-      displayName: 'Gemini 1.5 (Fast & Stable)',
-      apiName: 'gemini-1.5-flash-latest',
-    ),
-    VqaModelOption(
-      displayName: 'Gemini 2.5 (Advanced Preview)',
-      apiName: 'gemini-2.5-flash-preview-05-20',
-    ),
-    VqaModelOption(displayName: 'Llava (Offline Failsafe)', apiName: 'llava'),
-  ];
-
-  String? _answer;
-  double? _processingTime;
-  final ImagePicker _picker = ImagePicker();
-  final TextEditingController _ipController =
-      TextEditingController()..text = '10.0.2.2'; // Example IP
   final TextEditingController _questionController = TextEditingController();
+  final ImagePicker _picker = ImagePicker();
+  File? _image;
 
-  @override
-  void initState() {
-    super.initState();
-    // Set a default model selection
-    if (_options.isNotEmpty) {
-      _selectedOption = _options[0];
-    }
-  }
-
-  Future<void> _pickImage(ImageSource source) async {
+  Future<void> _pickImage() async {
     try {
-      final pickedFile = await _picker.pickImage(source: source);
-      if (!mounted) return;
+      final pickedFile = await _picker.pickImage(source: ImageSource.camera);
       if (pickedFile != null) {
         setState(() {
-          _selectedImage = File(pickedFile.path);
-          _answer = null;
-          _processingTime = null;
+          _image = File(pickedFile.path);
         });
       }
     } catch (e) {
-      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Camera error: ${e.toString()}')));
+      ).showSnackBar(SnackBar(content: Text("Failed to pick image: $e")));
     }
   }
 
-  Future<void> _sendForAnalysis() async {
-    if (_selectedImage == null || _selectedOption == null) {
+  void _getAnswer() {
+    if (_image == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select image and model')),
-      );
-      return;
-    }
-    if (_ipController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter server IP address')),
+        const SnackBar(content: Text("Please select an image first.")),
       );
       return;
     }
     if (_questionController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your question')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Please enter a question.")));
       return;
     }
 
-    setState(() {
-      _isSending = true;
-      _answer = null;
-    });
+    context.read<VqaViewModel>().fetchVqaResult(
+      _image!.path,
+      _questionController.text,
+    );
+  }
 
-    try {
-      var request = http.MultipartRequest(
-        'POST',
-        Uri.parse('http://${_ipController.text}:8000/api/v1/vqa/'),
-      );
-      // Send the apiName to the backend
-      request.fields['option'] = _selectedOption!.apiName;
-      request.fields['question'] = _questionController.text;
-
-      final fileExt = _selectedImage!.path.split('.').last.toLowerCase();
-      final contentType =
-          fileExt == 'png'
-              ? MediaType('image', 'png')
-              : MediaType('image', 'jpeg');
-      request.files.add(
-        await http.MultipartFile.fromPath(
-          'image',
-          _selectedImage!.path,
-          contentType: contentType,
-        ),
-      );
-
-      var response = await request.send();
-      final responseBody = await response.stream.bytesToString();
-
-      if (!mounted) return;
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> jsonResponse = jsonDecode(responseBody);
-        setState(() {
-          _answer = jsonResponse['answer'];
-          _processingTime = jsonResponse['processing_time'].toDouble();
-        });
-        flutterTts.speak(_answer!);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Analysis failed (${response.statusCode}): $responseBody',
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Connection error: ${e.toString()}')),
-      );
-    } finally {
-      if (mounted) setState(() => _isSending = false);
-    }
+  @override
+  void dispose() {
+    _questionController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final vqaViewModel = context.watch<VqaViewModel>();
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Visual Question Answering'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
+        title: const Text("Visual Question Answering"),
+        backgroundColor: Colors.blue,
       ),
-      body: SingleChildScrollView(
-        child: Padding(
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              TextField(
-                controller: _ipController,
-                decoration: InputDecoration(
-                  labelText: 'Server IP Address',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  prefixIcon: const Icon(Icons.network_wifi),
-                ),
-              ),
-              const SizedBox(height: 20),
               Container(
-                height: 300,
+                height: 250,
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
+                  border: Border.all(color: Colors.grey.shade400),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child:
-                    _selectedImage == null
-                        ? Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(
-                              Icons.image_outlined,
-                              size: 60,
-                              color: Colors.grey,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'No image selected',
-                              style: TextStyle(color: Colors.grey.shade600),
-                            ),
-                          ],
-                        )
+                    _image == null
+                        ? const Center(child: Text("No image selected."))
                         : ClipRRect(
                           borderRadius: BorderRadius.circular(12),
-                          child: Image.file(_selectedImage!, fit: BoxFit.cover),
+                          child: Image.file(_image!, fit: BoxFit.cover),
                         ),
               ),
-              const SizedBox(height: 20),
-              TextField(
-                controller: _questionController,
-                decoration: InputDecoration(
-                  labelText: 'Your question',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                maxLines: 3,
-              ),
-              const SizedBox(height: 20),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.blue.shade100),
-                ),
-                child:
-                    _answer == null
-                        ? Column(
-                          children: [
-                            Icon(
-                              Icons.question_answer_outlined,
-                              size: 40,
-                              color: Colors.grey.shade500,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Answer will appear here',
-                              style: TextStyle(color: Colors.grey.shade600),
-                            ),
-                          ],
-                        )
-                        : Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Answer:',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(context).primaryColor,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              _answer!,
-                              style: const TextStyle(fontSize: 14),
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              'Processed in ${_processingTime?.toStringAsFixed(2)}s',
-                              style: TextStyle(
-                                color: Colors.grey.shade600,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-              ),
-              const SizedBox(height: 20),
-              // Updated Dropdown to use the new class and user-friendly names
-              DropdownButtonFormField<VqaModelOption>(
-                decoration: InputDecoration(
-                  labelText: 'Select VQA model',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                value: _selectedOption,
-                items:
-                    _options
-                        .map(
-                          (option) => DropdownMenuItem(
-                            value: option,
-                            child: Text(option.displayName),
-                          ),
-                        )
-                        .toList(),
-                onChanged: (value) => setState(() => _selectedOption = value),
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: _isSending ? null : _sendForAnalysis,
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: _pickImage,
+                icon: const Icon(Icons.camera_alt),
+                label: const Text("Take Picture"),
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
-                child:
-                    _isSending
-                        ? const SizedBox(
-                          height: 24,
-                          width: 24,
-                          child: CircularProgressIndicator(strokeWidth: 3),
-                        )
-                        : const Text('GET ANSWER'),
               ),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  FilledButton.icon(
-                    icon: const Icon(Icons.camera_alt_outlined),
-                    label: const Text('Camera'),
-                    onPressed: () => _pickImage(ImageSource.camera),
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 12,
-                        horizontal: 24,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
+              const SizedBox(height: 24),
+
+              // --- ADDED ---
+              // Dropdown for selecting the AI model.
+              // This is the UI counterpart to the logic we added in the ViewModel.
+              DropdownButtonFormField<String>(
+                value: vqaViewModel.selectedModel,
+                items: const [
+                  DropdownMenuItem(
+                    value: 'gemini-1.5-flash-latest',
+                    child: Text('Gemini (Online)'),
                   ),
-                  FilledButton.icon(
-                    icon: const Icon(Icons.photo_library_outlined),
-                    label: const Text('Gallery'),
-                    onPressed: () => _pickImage(ImageSource.gallery),
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 12,
-                        horizontal: 24,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
+                  DropdownMenuItem(
+                    value: 'llava',
+                    child: Text('Llava (Offline)'),
                   ),
                 ],
+                onChanged: (value) {
+                  if (value != null) {
+                    // Use context.read to call the state update method
+                    // without causing a rebuild here.
+                    context.read<VqaViewModel>().setModel(value);
+                  }
+                },
+                decoration: const InputDecoration(
+                  labelText: 'Select AI Model',
+                  border: OutlineInputBorder(),
+                ),
               ),
+              const SizedBox(height: 16),
+
+              // --- END ADDED SECTION ---
+              TextField(
+                controller: _questionController,
+                decoration: const InputDecoration(
+                  labelText: "Ask a question about the scene",
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: vqaViewModel.isLoading ? null : _getAnswer,
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text("Get Answer"),
+              ),
+              const SizedBox(height: 30),
+              if (vqaViewModel.isLoading)
+                const Center(child: CircularProgressIndicator())
+              else if (vqaViewModel.errorMessage != null)
+                Center(
+                  child: Text(
+                    "Error: ${vqaViewModel.errorMessage}",
+                    style: const TextStyle(color: Colors.red, fontSize: 16),
+                    textAlign: TextAlign.center,
+                  ),
+                )
+              else if (vqaViewModel.vqaResult != null)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    "Answer: ${vqaViewModel.vqaResult!.answer}",
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
             ],
           ),
         ),

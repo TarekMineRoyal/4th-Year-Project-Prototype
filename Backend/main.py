@@ -1,4 +1,4 @@
-import logging
+import uvicorn
 from fastapi import FastAPI
 from src.presentation.logging_middleware import LoggingMiddleware
 from logging_config import setup_logging
@@ -10,10 +10,6 @@ from src.presentation.api import api_router
 load_settings()
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# 1. Call the setup function at the start of your application
 setup_logging()
 
 # Create FastAPI app
@@ -23,7 +19,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# 2. Add the middleware to your app
+# Add the middleware to your app
 app.add_middleware(LoggingMiddleware)
 
 # Add CORS middleware to allow all origins

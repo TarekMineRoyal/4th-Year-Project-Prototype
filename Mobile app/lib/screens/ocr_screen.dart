@@ -1,281 +1,123 @@
+// lib/screens/ocr_screen.dart
+
 import 'dart:io';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:http/http.dart' as http;
-import 'package:http_parser/http_parser.dart';
-import 'package:flutter_tts/flutter_tts.dart';
+import 'package:provider/provider.dart';
+import '../viewmodels/ocr_viewmodel.dart';
 
 class OCRScreen extends StatefulWidget {
   const OCRScreen({super.key});
 
   @override
-  State<OCRScreen> createState() => _OCRScreenState();
+  _OCRScreenState createState() => _OCRScreenState();
 }
 
 class _OCRScreenState extends State<OCRScreen> {
-  File? _selectedImage;
-  bool _isSending = false;
-  final FlutterTts flutterTts = FlutterTts();
-
-  String? _extractedText;
-  double? _processingTime;
   final ImagePicker _picker = ImagePicker();
-  final TextEditingController _ipController =
-      TextEditingController()..text = '10.0.2.2'; // Example IP
+  File? _image;
 
-  Future<void> _pickImage(ImageSource source) async {
+  // --- Local UI Methods ---
+
+  Future<void> _pickImageAndAnalyze() async {
+    // This logic is purely for the UI, so it stays in the View.
     try {
-      final pickedFile = await _picker.pickImage(source: source);
-      if (!mounted) return;
+      final pickedFile = await _picker.pickImage(source: ImageSource.camera);
       if (pickedFile != null) {
         setState(() {
-          _selectedImage = File(pickedFile.path);
-          _extractedText = null;
-          _processingTime = null;
+          _image = File(pickedFile.path);
         });
+        // Immediately call the ViewModel to analyze the new image
+        // Use context.read to call the method without rebuilding.
+        context.read<OcrViewModel>().fetchOcrResult(_image!.path);
       }
     } catch (e) {
-      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Camera error: ${e.toString()}')));
-    }
-  }
-
-  Future<void> _sendForAnalysis() async {
-    if (_selectedImage == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Please select an image')));
-      return;
-    }
-    if (_ipController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter server IP address')),
-      );
-      return;
-    }
-
-    setState(() {
-      _isSending = true;
-      _extractedText = null;
-    });
-
-    try {
-      var request = http.MultipartRequest(
-        'POST',
-        Uri.parse('http://${_ipController.text}:8000/api/v1/ocr/'),
-      );
-
-      final fileExt = _selectedImage!.path.split('.').last.toLowerCase();
-      final contentType =
-          fileExt == 'png'
-              ? MediaType('image', 'png')
-              : MediaType('image', 'jpeg');
-      request.files.add(
-        await http.MultipartFile.fromPath(
-          'image',
-          _selectedImage!.path,
-          contentType: contentType,
-        ),
-      );
-
-      var response = await request.send();
-      final responseBody = await response.stream.bytesToString();
-
-      if (!mounted) return;
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> jsonResponse = jsonDecode(responseBody);
-        setState(() {
-          _extractedText = jsonResponse['text'];
-          _processingTime = jsonResponse['processing_time'].toDouble();
-        });
-        flutterTts.speak(_extractedText!);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Analysis failed (${response.statusCode}): $responseBody',
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Connection error: ${e.toString()}')),
-      );
-    } finally {
-      if (mounted) setState(() => _isSending = false);
+      ).showSnackBar(SnackBar(content: Text("Failed to pick image: $e")));
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // Use context.watch to listen for state changes from the ViewModel.
+    // This widget will rebuild whenever notifyListeners() is called.
+    final ocrViewModel = context.watch<OcrViewModel>();
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Text Reader (OCR)'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
+        title: const Text("Text Reader (OCR)"),
+        backgroundColor: Colors.green,
       ),
       body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              TextField(
-                controller: _ipController,
-                decoration: InputDecoration(
-                  labelText: 'Server IP Address',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  prefixIcon: const Icon(Icons.network_wifi),
-                ),
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // --- Image Display ---
+            Container(
+              height: 250,
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.shade400),
+                borderRadius: BorderRadius.circular(12),
               ),
-              const SizedBox(height: 20),
-              Container(
-                height: 300,
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child:
-                    _selectedImage == null
-                        ? Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(
-                              Icons.image_outlined,
-                              size: 60,
-                              color: Colors.grey,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'No image selected',
-                              style: TextStyle(color: Colors.grey.shade600),
-                            ),
-                          ],
-                        )
-                        : ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.file(_selectedImage!, fit: BoxFit.cover),
-                        ),
+              child:
+                  _image == null
+                      ? const Center(
+                        child: Text("Point camera at text to read."),
+                      )
+                      : ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.file(_image!, fit: BoxFit.cover),
+                      ),
+            ),
+            const SizedBox(height: 20),
+
+            // --- Action Button ---
+            ElevatedButton.icon(
+              onPressed:
+                  ocrViewModel.isLoading
+                      ? null
+                      : _pickImageAndAnalyze, // Disable while loading
+              icon: const Icon(Icons.camera_enhance),
+              label: const Text("Scan Text"),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
               ),
-              const SizedBox(height: 20),
+            ),
+            const SizedBox(height: 30),
+
+            // --- Reactive Result Display ---
+            // This part of the UI rebuilds based on the ViewModel's state.
+            if (ocrViewModel.isLoading)
+              const Center(child: CircularProgressIndicator())
+            else if (ocrViewModel.errorMessage != null)
+              Center(
+                child: Text(
+                  "Error: ${ocrViewModel.errorMessage}",
+                  style: const TextStyle(color: Colors.red, fontSize: 16),
+                  textAlign: TextAlign.center,
+                ),
+              )
+            else if (ocrViewModel.ocrResult != null)
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.green.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.green.shade100),
+                  color: Colors.green.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                child:
-                    _extractedText == null
-                        ? Column(
-                          children: [
-                            Icon(
-                              Icons.text_fields_rounded,
-                              size: 40,
-                              color: Colors.grey.shade500,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Extracted text will appear here',
-                              style: TextStyle(color: Colors.grey.shade600),
-                            ),
-                          ],
-                        )
-                        : Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Extracted Text:',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.green.shade800,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              _extractedText!,
-                              style: const TextStyle(fontSize: 14),
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              'Processed in ${_processingTime?.toStringAsFixed(2)}s',
-                              style: TextStyle(
-                                color: Colors.grey.shade600,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: _isSending ? null : _sendForAnalysis,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                child: SelectableText(
+                  // Use SelectableText to allow copying
+                  ocrViewModel.ocrResult!.text.isEmpty
+                      ? "No text found."
+                      : ocrViewModel.ocrResult!.text,
+                  style: const TextStyle(fontSize: 16),
+                  textAlign: TextAlign.left,
                 ),
-                child:
-                    _isSending
-                        ? const SizedBox(
-                          height: 24,
-                          width: 24,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 3,
-                            color: Colors.white,
-                          ),
-                        )
-                        : const Text('EXTRACT TEXT'),
               ),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  FilledButton.icon(
-                    icon: const Icon(Icons.camera_alt_outlined),
-                    label: const Text('Camera'),
-                    onPressed: () => _pickImage(ImageSource.camera),
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 12,
-                        horizontal: 24,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                  FilledButton.icon(
-                    icon: const Icon(Icons.photo_library_outlined),
-                    label: const Text('Gallery'),
-                    onPressed: () => _pickImage(ImageSource.gallery),
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 12,
-                        horizontal: 24,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+          ],
         ),
       ),
     );

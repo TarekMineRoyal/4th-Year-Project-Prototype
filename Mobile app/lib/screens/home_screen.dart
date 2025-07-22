@@ -1,10 +1,66 @@
+// lib/screens/home_screen.dart
+
 import 'package:flutter/material.dart';
+import '../services/settings_service.dart';
 import 'ocr_screen.dart';
 import 'vqa_screen.dart';
 import 'video_analysis_screen.dart';
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  final SettingsService _settingsService = SettingsService();
+
+  @override
+  void initState() {
+    super.initState();
+    // This ensures we don't try to show a dialog while the first frame is still building.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAndPromptForIp();
+    });
+  }
+
+  void _checkAndPromptForIp() {
+    final ip = _settingsService.getIpAddress();
+    if (ip == null || ip.isEmpty) {
+      _showIpDialog();
+    }
+  }
+
+  void _showIpDialog() {
+    final ipController = TextEditingController();
+    showDialog(
+      context: context,
+      barrierDismissible: false, // User MUST enter an IP
+      builder:
+          (context) => AlertDialog(
+            title: const Text("Backend Configuration"),
+            content: TextField(
+              controller: ipController,
+              decoration: const InputDecoration(
+                hintText: "Enter your laptop's IP",
+              ),
+              keyboardType: TextInputType.number,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  if (ipController.text.isNotEmpty) {
+                    _settingsService.setIpAddress(ipController.text);
+                    Navigator.of(context).pop();
+                  }
+                },
+                child: const Text("Save for this session"),
+              ),
+            ],
+          ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,6 +84,14 @@ class HomePage extends StatelessWidget {
             ),
           ),
         ),
+        // We can add a settings icon to allow changing the IP later
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: _showIpDialog,
+            tooltip: 'Change Backend IP',
+          ),
+        ],
       ),
       body: Container(
         decoration: BoxDecoration(
@@ -42,17 +106,15 @@ class HomePage extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Card for the Interactive Scene Explorer (VQA)
               _buildFeatureCard(
                 context,
-                Icons.question_answer_rounded,
+                Icons.videocam_rounded,
                 'Interactive Scene Explorer',
                 'Ask questions about your surroundings',
                 const VQAScreen(),
                 Colors.blue,
               ),
               const SizedBox(height: 30),
-              // Card for the Text Reader (OCR)
               _buildFeatureCard(
                 context,
                 Icons.text_fields_rounded,
@@ -62,14 +124,13 @@ class HomePage extends StatelessWidget {
                 Colors.green,
               ),
               const SizedBox(height: 30),
-              // Card for the Video analysis
               _buildFeatureCard(
                 context,
-                Icons.videocam_rounded, // New Icon
-                'Live Scene Analysis', // New Title
-                'Analyze your surroundings in real-time', // New Subtitle
-                const VideoAnalysisScreen(), // Navigate to the new screen
-                Colors.purple, // New Color
+                Icons.videocam_rounded,
+                'Live Scene Analysis',
+                'Analyze your surroundings in real-time',
+                const VideoAnalysisScreen(),
+                Colors.purple,
               ),
             ],
           ),
@@ -78,6 +139,7 @@ class HomePage extends StatelessWidget {
     );
   }
 
+  // This buildFeatureCard method remains unchanged.
   Widget _buildFeatureCard(
     BuildContext context,
     IconData icon,
