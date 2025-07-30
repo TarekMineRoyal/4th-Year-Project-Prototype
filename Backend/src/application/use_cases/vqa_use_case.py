@@ -40,7 +40,7 @@ class VQAUseCase:
             # Log before calling the vision service
             logger.info(
                 "Calling vision service for analysis.",
-                model_option=request.model_option,
+                model_option="gemini-2.5-flash-preview-05-20",
                 question_length=len(request.question)
             )
 
@@ -48,7 +48,7 @@ class VQAUseCase:
             analysis_result = self.vision_service.analyze_image(
                 image=request.image,
                 prompt=prompt,
-                model_option=request.model_option
+                model_option="gemini-2.5-pro"
             )
             logger.info("Successfully received analysis from vision service.")
 

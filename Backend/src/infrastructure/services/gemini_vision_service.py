@@ -34,10 +34,6 @@ class GeminiVisionService(VisionService):
             model_option=model_option
         )
 
-        if model_option == "llava":
-            logger.warning("Unsupported model requested.", model_option="llava")
-            raise HTTPException(status_code=400, detail="Llava model is not supported in this service.")
-
         try:
             img = Image.open(io.BytesIO(image.content))
 
