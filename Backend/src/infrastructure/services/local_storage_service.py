@@ -16,15 +16,13 @@ class LocalStorageService(StorageService):
     A concrete implementation of the StorageService that saves files locally.
     """
 
-    def __init__(self, upload_dir: str = "uploads", analyzed_dir: str = "analyzed"):
-        self.upload_dir = upload_dir
+    def __init__(self, analyzed_dir: str = "analyzed"):
         self.analyzed_dir = analyzed_dir
 
         try:
             # Ensure directories exist
-            Path(self.upload_dir).mkdir(exist_ok=True)
             Path(self.analyzed_dir).mkdir(exist_ok=True)
-            logger.info("Storage directories ensured.", upload_dir=upload_dir, analyzed_dir=analyzed_dir)
+            logger.info("Storage directories ensured.", analyzed_dir=analyzed_dir)
         except Exception as e:
             logger.exception("Failed to create storage directories.")
             # This could be a permissions error, so we raise it.

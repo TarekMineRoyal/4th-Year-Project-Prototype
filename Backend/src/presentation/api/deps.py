@@ -1,3 +1,4 @@
+# Dependency Injection Hub
 from src.application.use_cases.vqa_use_case import VQAUseCase
 from src.application.use_cases.ocr_use_case import OCRUseCase
 from src.application.use_cases.video_analysis_use_case import VideoAnalysisUseCase

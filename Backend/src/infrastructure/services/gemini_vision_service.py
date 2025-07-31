@@ -42,9 +42,6 @@ class GeminiVisionService(VisionService):
 
             model = genai.GenerativeModel(model_option)
 
-            # --- THE FIX ---
-            # Set a longer timeout for the API request (e.g., 120 seconds).
-            # The default is often too short for complex image analysis.
             request_options = {"timeout": 120}
 
             # Pass the request_options to the generate_content call
@@ -52,7 +49,6 @@ class GeminiVisionService(VisionService):
                 [prompt, img],
                 request_options=request_options
             )
-            # --- END FIX ---
 
             processing_time = round(time.time() - start_time, 2)
 

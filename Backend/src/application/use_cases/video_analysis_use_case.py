@@ -22,26 +22,27 @@ class VideoAnalysisUseCase:
         start_time = time.time()
 
         try:
+            NO_CHANGE_INDICATOR = "NONE"
             prompt = f"""You are describing a video feed for a visually impaired user.
-The previous description was: '{request.previous_scene_description}'.
-Based on the new frame, describe only what is new or what has changed in the scene.
-Be very concise. If nothing significant has changed, respond with only the word 'NONE'."""
+                The previous description was: '{request.previous_scene_description}'.
+                Based on the new frame, describe only what is new or what has changed in the scene.
+                Be very concise. If nothing significant has changed, respond with only the word '{NO_CHANGE_INDICATOR}'."""
 
             # Log before calling the vision service
             logger.info(
                 "Calling vision service for video frame analysis.",
-                model_option="gemini-2.5-flash-preview-05-20"
+                model_option=request.model_option
             )
             # Call the vision service via its clean interface
             analysis_result = self.vision_service.analyze_image(
                 image=request.image,
                 prompt=prompt,
-                model_option="gemini-2.5-flash-preview-05-20"  # Use a fast model
+                model_option=request.model_option
             )
             logger.info("Successfully received analysis from vision service.")
 
             description = analysis_result.text.strip()
-            has_changed = not (description.upper() == 'NONE' or description == "")
+            has_changed = not (description.upper() == NO_CHANGE_INDICATOR or description == "")
 
             logger.debug("Scene change analysis complete.", has_changed=has_changed, description=description)
 
@@ -52,7 +53,7 @@ Be very concise. If nothing significant has changed, respond with only the word 
                 analyzed_path = self.storage_service.save_image(
                     image_bytes=request.image.content,
                     original_filename=request.image.filename,
-                    prefix="video"
+                    prefix="video" # Consider changing to "frame"
                 )
                 logger.info("Successfully saved image to storage.", path=analyzed_path)
             else:

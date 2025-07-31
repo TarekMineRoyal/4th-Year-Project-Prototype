@@ -27,14 +27,14 @@ class OCRUseCase:
             # Log before calling the vision service
             logger.info(
                 "Calling vision service for OCR analysis.",
-                model_option="gemini-2.5-flash-preview-05-20"
+                model_option=request.model_option
             )
 
             # Call the vision service via its clean interface
             analysis_result = self.vision_service.analyze_image(
                 image=request.image,
                 prompt=prompt,
-                model_option="gemini-2.5-flash-preview-05-20"  # Specific model for OCR
+                model_option=request.model_option
             )
             logger.info("Successfully received analysis from vision service.")
 

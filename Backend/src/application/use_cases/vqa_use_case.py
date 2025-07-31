@@ -40,7 +40,7 @@ class VQAUseCase:
             # Log before calling the vision service
             logger.info(
                 "Calling vision service for analysis.",
-                model_option="gemini-2.5-flash-preview-05-20",
+                model_option=request.model_option,
                 question_length=len(request.question)
             )
 
@@ -48,7 +48,7 @@ class VQAUseCase:
             analysis_result = self.vision_service.analyze_image(
                 image=request.image,
                 prompt=prompt,
-                model_option="gemini-2.5-pro"
+                model_option=request.model_option
             )
             logger.info("Successfully received analysis from vision service.")
 
@@ -71,7 +71,9 @@ class VQAUseCase:
             result = VQAResult(
                 answer=analysis_result.text,
                 processing_time=total_processing_time,
-                analyzed_path=analyzed_path
+                analyzed_path=analyzed_path ## Why is that there, that maybe should be removed.
+                # Answer: that is being returned for the ability for a user to ask a follow-up question about the pic (not yet implemented)
+                # Also, if the report feature would be implemented in the future, the user will report the path
             )
 
             logger.info(

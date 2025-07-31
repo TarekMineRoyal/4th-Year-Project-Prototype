@@ -19,7 +19,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Add the middleware to your app
+# Add the middleware to the app
 app.add_middleware(LoggingMiddleware)
 
 # Add CORS middleware to allow all origins
