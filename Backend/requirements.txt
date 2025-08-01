@@ -1,7 +1,8 @@
 fastapi~=0.115.12
 pillow~=11.2.1
-dotenv~=0.9.9
-python-dotenv~=1.1.0
 pydantic~=2.11.5
 protobuf~=5.29.5
 structlog~=25.4.0
+starlette~=0.46.2
+pydantic-settings~=2.10.1
+uvicorn~=0.34.3

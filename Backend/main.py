@@ -3,14 +3,17 @@ from fastapi import FastAPI
 from src.presentation.logging_middleware import LoggingMiddleware
 from logging_config import setup_logging
 from fastapi.middleware.cors import CORSMiddleware
-from src.infrastructure.config import load_settings
+from src.infrastructure.config import load_env_settings
 from src.presentation.api import api_router
 
-# Load settings and configure external services at startup
-load_settings()
+# The call to load_settings() is removed, as configuration is now
+# handled on-demand by the dependency injection system.
 
-# Configure logging
+# Configure logging at startup
 setup_logging()
+
+# Load environment settings
+load_env_settings()
 
 # Create FastAPI app
 app = FastAPI(

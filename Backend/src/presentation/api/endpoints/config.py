@@ -8,7 +8,10 @@ class FeatureConfig(BaseModel):
     """
     vqa_model: str
     ocr_model: str
-    video_analysis_model: str
+    video_scene_extractor: str
+    video_scene_aggregator: str
+    video_scene_qa: str
+
 
 router = APIRouter()
 
@@ -18,5 +21,7 @@ router = APIRouter()
 ACTIVE_MODELS_CONFIG = FeatureConfig(
     vqa_model="gemini-2.5-flash",
     ocr_model="gemini-2.5-pro",
-    video_analysis_model="gemini-2.5-flash-lite-preview-06-17"
+    video_scene_extractor="gemini-2.5-flash",
+    video_scene_aggregator="gemini-2.5-pro",
+    video_scene_qa="gemini-2.5-pro",
 )

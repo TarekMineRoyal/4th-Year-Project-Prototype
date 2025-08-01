@@ -32,13 +32,11 @@ async def vqa_endpoint(
     )
 
     # The backend now dictates the model to use.
-    # It reads directly from the imported configuration object.
-    backend_selected_model = ACTIVE_MODELS_CONFIG.vqa_model
 
     # The VQARequest object is now populated with the backend's choice.
     vqa_request = VQARequest(
         question=question,
-        model_option=backend_selected_model,  # Use the model from our config
+        model_option=ACTIVE_MODELS_CONFIG.vqa_model,  # Use the model from our config
         image=image_file
     )
 

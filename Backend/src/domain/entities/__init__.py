@@ -2,5 +2,13 @@
 from .image import ImageFile
 from .vqa import VQARequest, VQAResult
 from .ocr import OCRRequest, OCRResult
-from .video_analysis import VideoAnalysisRequest, VideoAnalysisResult
 from .analysis import AnalysisResult
+from .video import VideoFile
+from .live_session import (
+    SessionQueryRequest,
+    SessionCreationResult,
+    SessionQueryResult,
+    SessionState,
+    SessionAnalysVideoRequest,
+    MediaType,
+)

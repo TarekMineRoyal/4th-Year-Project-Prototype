@@ -3,22 +3,22 @@ from abc import ABC, abstractmethod
 class StorageService(ABC):
     """
     Abstract base class (interface) for a file storage service.
-    It defines the contract for saving files.
+    It defines a generic contract for saving files.
     """
     @abstractmethod
-    def save_image(
+    def save_file(
         self,
-        image_bytes: bytes,
+        file_bytes: bytes,
         original_filename: str,
         prefix: str
     ) -> str:
         """
-        Saves image bytes to a persistent storage.
+        Saves a file's binary content to a persistent storage.
 
         Args:
-            image_bytes: The binary content of the image.
-            original_filename: The original name of the uploaded file.
-            prefix: A prefix (e.g., 'vqa', 'ocr') for the saved filename.
+            file_bytes: The binary content of the file (image, video, etc.).
+            original_filename: The original name of the uploaded file, used to get the extension.
+            prefix: A prefix (e.g., 'vqa', 'session_clip') for the saved filename.
 
         Returns:
             The path to the saved file.
