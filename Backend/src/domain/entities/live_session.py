@@ -1,6 +1,8 @@
 # In src/domain/entities/live_session.py
 from pydantic import BaseModel
 from typing import List, Union
+
+from .documents import AnalysisMode
 from .video import VideoFile
 from .image import ImageFile
 
@@ -12,6 +14,7 @@ class SessionQueryRequest(BaseModel):
     session_id: str
     question: str
     model_option: str
+    mode: AnalysisMode
 
 # OUTPUT for the /start endpoint
 class SessionCreationResult(BaseModel):

@@ -11,6 +11,7 @@ class FeatureConfig(BaseModel):
     video_scene_extractor: str
     video_scene_aggregator: str
     video_scene_qa: str
+    objects_extractor: str
 
 
 router = APIRouter()
@@ -24,4 +25,5 @@ ACTIVE_MODELS_CONFIG = FeatureConfig(
     video_scene_extractor="gemini-2.5-flash",
     video_scene_aggregator="gemini-2.5-pro",
     video_scene_qa="gemini-2.5-pro",
+    objects_extractor="gemini-2.5-pro"
 )

@@ -46,9 +46,10 @@ class Settings(BaseSettings):
     # The base directory where all media files will be stored.
     storage_dir: str = "storage"
 
-    # This tells Pydantic to load the variables from a file named '.env'
-    # located in the same directory.
-    #model_config = SettingsConfigDict(env_file=".env", env_file_encoding='utf-8')
+
+    # --- NEW: MongoDB Settings ---
+    mongodb_uri: str = "mongodb://localhost:27017"
+    mongodb_db_name: str = "auralens_dataset_db"
 
 
 @lru_cache(maxsize=1)

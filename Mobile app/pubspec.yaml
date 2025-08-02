@@ -39,6 +39,7 @@ dependencies:
   flutter_tts: ^4.2.3 # For text to speach
   camera: ^0.11.2 # For camera live feed
   provider: ^6.1.5
+  shared_preferences: ^2.5.3
      
 
 dev_dependencies:

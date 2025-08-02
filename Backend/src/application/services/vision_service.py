@@ -1,5 +1,8 @@
 from abc import ABC, abstractmethod
+
 from src.domain.entities import ImageFile, VideoFile, AnalysisResult
+
+
 
 class VisionService(ABC):
     """
@@ -61,5 +64,18 @@ class VisionService(ABC):
 
         Returns:
             An AnalysisResult object containing the raw text and processing time.
+        """
+        pass
+
+    @abstractmethod
+    async def get_object_list(self, image: ImageFile) -> list[str]:
+        """
+        Analyzes an image and returns a list of objects.
+
+        Args:
+            image: The ImageFile object to analyze.
+
+        Returns:
+            A list of strings, where each string is an object description.
         """
         pass

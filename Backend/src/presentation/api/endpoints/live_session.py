@@ -18,6 +18,7 @@ from src.domain.entities import (
     SessionCreationResult,
     SessionQueryResult,
     SessionQueryRequest,
+    AnalysisMode
 )
 from src.presentation.api.deps import get_live_session_use_case
 from src.domain.entities.live_session import SessionAnalysVideoRequest
@@ -76,7 +77,7 @@ async def process_clip_endpoint(
             media= video_file
         )
         # Add the heavy processing to a background task
-        background_tasks.add_task(use_case.run_extraction_task(session_analysis_video_request, background_tasks))
+        background_tasks.add_task(use_case.run_extraction_task,session_analysis_video_request, background_tasks)
 
         return {"status": "clip_processing_started", "session_id": session_id}
     except Exception as e:
@@ -117,7 +118,7 @@ async def process_frame_endpoint(
             media=image_file
         )
         # Add the heavy processing to a background task
-        background_tasks.add_task(use_case.run_extraction_task(session_analysis_video_request, background_tasks))
+        background_tasks.add_task(use_case.run_extraction_task, session_analysis_video_request, background_tasks)
 
         return {"status": "frame_processing_started", "session_id": session_id}
     except Exception as e:
@@ -142,8 +143,9 @@ async def query_session_endpoint(
             session_id= session_id,
             question= question,
             model_option=ACTIVE_MODELS_CONFIG.video_scene_qa,
+            mode= AnalysisMode.BRIEF
         )
-        result = use_case.answer_question(request)
+        result = await use_case.answer_question(request)
         return result
     except ValueError as e:
         # This catches the error if the session ID is not found

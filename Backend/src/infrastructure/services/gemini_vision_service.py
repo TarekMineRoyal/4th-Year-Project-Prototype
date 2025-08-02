@@ -1,4 +1,6 @@
+import json
 import time
+import asyncio
 import structlog
 import io
 import os
@@ -10,6 +12,7 @@ from google.api_core import exceptions as google_exceptions
 from src.application.services.vision_service import VisionService
 from src.domain.entities import AnalysisResult
 from src.domain.entities import VideoFile, ImageFile
+from src.presentation.api.endpoints.config import ACTIVE_MODELS_CONFIG
 
 logger = structlog.get_logger(__name__)
 
@@ -201,3 +204,33 @@ class GeminiVisionService(VisionService):
         except Exception as e:
             logger.exception("An unexpected error occurred during text analysis with Gemini API.")
             raise HTTPException(status_code=500, detail=f"An error occurred with the language model: {str(e)}")
+
+    async def get_object_list(self, image: ImageFile) -> list[str]:
+        """
+        Analyzes an image and returns a list of objects, tailored for the blind.
+        """
+        prompt = (
+            "Analyze the provided image. Identify all distinct objects. "
+            "Return a JSON list of strings. Each string should be a simple, "
+            "clear description of one object. For example: "
+            '["a red coffee mug", "a silver laptop", "a pair of black glasses"]. '
+            "Ensure the output is only the JSON list and nothing else."
+        )
+        try:
+            img = Image.open(io.BytesIO(image.content))
+            logger.debug("Sending request to Gemini API to analyze objects.")
+
+            model = genai.GenerativeModel(ACTIVE_MODELS_CONFIG.objects_extractor)
+
+            # Pass the request_options to the generate_content call
+            response = model.generate_content(
+                [prompt, img],
+            )
+            # Basic parsing to find the JSON list in the response text
+            json_str = response.text[response.text.find('['):response.text.rfind(']') + 1]
+            return json.loads(json_str)
+        except (json.JSONDecodeError, ValueError, IndexError) as e:
+            # Handle cases where the model doesn't return a perfect list
+            logger.error(f"Could not parse object list from Gemini: {e}")
+            logger.error(f"Gemini raw response for object list: {response.text}")
+            return []  # Return an empty list on failure

@@ -9,10 +9,13 @@ import '../models/vqa_result.dart';
 import '../models/ocr_result.dart';
 import '../models/session_question_result.dart';
 import '../models/video_processing_result.dart';
+import '../models/user_init_response.dart';
 import 'settings_service.dart';
+import 'user_service.dart';
 
 class ApiService {
   final SettingsService _settingsService = SettingsService();
+  final UserService _userService = UserService();
 
   Future<String> _getBaseUrl() async {
     final ip = _settingsService.getIpAddress();
@@ -218,6 +221,34 @@ class ApiService {
       throw Exception(
         'Failed to process clip: ${response.statusCode} - $responseBody',
       );
+    }
+  }
+
+  // This method is called once when the app starts to get a user ID.
+  Future<void> initializeUser() async {
+    // First, check if a user ID already exists.
+    final existingUserId = await _userService.getUserId();
+    if (existingUserId == null) {
+      // If no ID exists, fetch a new one from the backend.
+      final baseUrl = await _getBaseUrl();
+      final uri = Uri.parse('$baseUrl/users/init');
+      try {
+        final response = await http.post(uri);
+        if (response.statusCode == 201) {
+          final responseBody = UserInitResponse.fromJson(
+            jsonDecode(response.body),
+          );
+          await _userService.setUserId(responseBody.userId);
+        } else {
+          // Handle cases where the server fails to provide an ID.
+          throw Exception(
+            'Failed to initialize user: ${response.statusCode} - ${response.body}',
+          );
+        }
+      } catch (e) {
+        // Handle network errors or other exceptions.
+        throw Exception('Could not connect to the server to initialize user.');
+      }
     }
   }
 }
