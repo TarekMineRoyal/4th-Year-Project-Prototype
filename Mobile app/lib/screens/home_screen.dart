@@ -1,11 +1,13 @@
 // lib/screens/home_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../services/settings_service.dart';
+import '../viewmodels/home_viewmodel.dart';
 import 'ocr_screen.dart';
 import 'vqa_screen.dart';
-import 'video_analysis_screen.dart';
 import 'session_screen.dart';
+import '../services/api_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -16,6 +18,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final SettingsService _settingsService = SettingsService();
+  final ApiService _apiService = ApiService();
 
   @override
   void initState() {
@@ -26,20 +29,34 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  void _checkAndPromptForIp() {
+  void _checkAndPromptForIp() async {
     final ip = _settingsService.getIpAddress();
     if (ip == null || ip.isEmpty) {
-      _showIpDialog();
+      // The dialog itself is async, so we await it.
+      await _showIpDialog();
+    } else {
+      // If IP already exists, try to initialize user right away.
+      try {
+        await _apiService.initializeUser();
+        // Add the mounted check here as well for safety.
+        if (!mounted) return;
+        context.read<HomeViewModel>().loadUserId();
+      } catch (e) {
+        print("Failed to initialize user on startup: $e");
+      }
     }
   }
 
-  void _showIpDialog() {
+  Future<void> _showIpDialog() async {
     final ipController = TextEditingController();
-    showDialog(
-      context: context,
-      barrierDismissible: false, // User MUST enter an IP
+    // It's good practice to store the BuildContext of the dialog's parent.
+    final currentContext = context;
+
+    await showDialog(
+      context: currentContext,
+      barrierDismissible: false,
       builder:
-          (context) => AlertDialog(
+          (dialogContext) => AlertDialog(
             title: const Text("Backend Configuration"),
             content: TextField(
               controller: ipController,
@@ -50,10 +67,35 @@ class _HomePageState extends State<HomePage> {
             ),
             actions: [
               TextButton(
-                onPressed: () {
+                onPressed: () async {
                   if (ipController.text.isNotEmpty) {
+                    // 1. Save the IP address
                     _settingsService.setIpAddress(ipController.text);
-                    Navigator.of(context).pop();
+
+                    // Close the dialog
+                    Navigator.of(dialogContext).pop();
+
+                    // 2. Try to initialize the user ID now that we have an IP
+                    try {
+                      await _apiService.initializeUser();
+                    } catch (e) {
+                      print("Failed to initialize user after setting IP: $e");
+                      // Check if mounted before showing SnackBar
+                      if (mounted) {
+                        ScaffoldMessenger.of(currentContext).showSnackBar(
+                          const SnackBar(
+                            content: Text("Could not get User ID from server."),
+                          ),
+                        );
+                      }
+                    }
+
+                    // --- THE FIX ---
+                    // 3. Before using the context, check if the widget is still mounted.
+                    if (!mounted) return;
+
+                    // Now it's safe to use the context to refresh the ViewModel.
+                    currentContext.read<HomeViewModel>().loadUserId();
                   }
                 },
                 child: const Text("Save for this session"),
@@ -65,15 +107,35 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final homeViewModel = context.watch<HomeViewModel>();
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Vision AI Toolbox',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.2,
-            fontSize: 22,
-          ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text(
+              'Vision AI Toolbox',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.2,
+                fontSize: 20,
+              ),
+            ),
+            if (homeViewModel.userId != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4.0),
+                child: Text(
+                  'ID: ${homeViewModel.userId}',
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: Colors.white70,
+                    fontFamily: 'monospace',
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+          ],
         ),
         centerTitle: true,
         flexibleSpace: Container(
@@ -109,7 +171,7 @@ class _HomePageState extends State<HomePage> {
             children: [
               _buildFeatureCard(
                 context,
-                Icons.videocam_rounded,
+                Icons.remove_red_eye_outlined,
                 'Interactive Scene Explorer',
                 'Ask questions about your surroundings',
                 const VQAScreen(),
@@ -127,21 +189,12 @@ class _HomePageState extends State<HomePage> {
               const SizedBox(height: 30),
               _buildFeatureCard(
                 context,
-                Icons.videocam_rounded,
-                'Live Scene Analysis',
-                'Analyze your surroundings in real-time',
-                const VideoAnalysisScreen(),
-                Colors.purple,
-              ),
-              _buildFeatureCard(
-                context,
                 Icons.memory, // Or any icon you like
                 'Live Session Q&A',
                 'Record a scene and ask questions about it',
                 const SessionScreen(), // Navigate to your new screen
                 Colors.orange, // Or any color you like
               ),
-              const SizedBox(height: 30),
             ],
           ),
         ),
@@ -165,7 +218,7 @@ class _HomePageState extends State<HomePage> {
             MaterialPageRoute(builder: (context) => screen),
           ),
       child: Container(
-        height: 180,
+        height: 120,
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
@@ -205,7 +258,7 @@ class _HomePageState extends State<HomePage> {
                     Text(
                       title,
                       style: TextStyle(
-                        fontSize: 20,
+                        fontSize: 18,
                         fontWeight: FontWeight.bold,
                         color: color,
                       ),
@@ -214,7 +267,7 @@ class _HomePageState extends State<HomePage> {
                     Text(
                       subtitle,
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 13,
                         color: Colors.grey.shade600,
                       ),
                     ),

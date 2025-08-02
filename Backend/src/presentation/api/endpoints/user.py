@@ -3,8 +3,11 @@
 import uuid
 from fastapi import APIRouter, status
 from src.domain.entities.user import UserInitResponse
+import structlog
 
 router = APIRouter()
+
+logger = structlog.get_logger(__name__)
 
 @router.post(
     "/init",
@@ -19,4 +22,5 @@ def create_user_id():
     'X-User-ID' header for all subsequent API calls.
     """
     new_id = uuid.uuid4()
+    logger.info("New user initialized.", new_id=new_id)
     return UserInitResponse(user_id=new_id)

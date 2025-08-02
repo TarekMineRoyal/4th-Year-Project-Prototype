@@ -1,7 +1,6 @@
 // lib/services/api_service.dart
 
 import 'dart:convert';
-import '../models/video_analysis_result.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
@@ -48,9 +47,14 @@ class ApiService {
     // The "modelOption" parameter is REMOVED.
   ) async {
     final baseUrl = await _getBaseUrl();
+    final userId = await _userService.getUserId();
+    if (userId == null) {
+      throw Exception("User ID has not been initialized.");
+    }
     var uri = Uri.parse('$baseUrl/vqa/');
     var request =
         http.MultipartRequest('POST', uri)
+          ..headers['X-User-ID'] = userId
           ..fields['question'] = question
           // The "option" field is REMOVED from the request.
           ..files.add(await _createImageFile(imagePath));
@@ -86,32 +90,6 @@ class ApiService {
       final responseBody = await response.stream.bytesToString();
       throw Exception(
         'Failed to get OCR result: ${response.statusCode} - $responseBody',
-      );
-    }
-  }
-
-  Future<VideoAnalysisResult> getVideoAnalysisResult(
-    String imagePath,
-    String previousDescription,
-    // The "modelOption" parameter is REMOVED.
-  ) async {
-    final baseUrl = await _getBaseUrl();
-    var uri = Uri.parse('$baseUrl/video/');
-    var request =
-        http.MultipartRequest('POST', uri)
-          ..fields['previous_scene_description'] = previousDescription
-          // The "option" field is REMOVED from the request.
-          ..files.add(await _createImageFile(imagePath));
-
-    var response = await request.send();
-
-    if (response.statusCode == 200) {
-      final responseBody = await response.stream.bytesToString();
-      return VideoAnalysisResult.fromJson(jsonDecode(responseBody));
-    } else {
-      final responseBody = await response.stream.bytesToString();
-      throw Exception(
-        'Failed to get Video Analysis result: ${response.statusCode} - $responseBody',
       );
     }
   }

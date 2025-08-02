@@ -16,7 +16,7 @@ def get_vision_service(settings: Settings = Depends(get_settings)) -> VisionServ
     return GeminiVisionService(timeout=settings.model_timeout_seconds)
 
 def get_storage_service(settings: Settings = Depends(get_settings)) -> StorageService:
-    return LocalStorageService(base_dir=settings.storage_dir)
+    return LocalStorageService(settings.storage_dir)
 
 def get_dataset_service() -> DatasetService:
     """Provides an instance of the MongoDatasetService."""
