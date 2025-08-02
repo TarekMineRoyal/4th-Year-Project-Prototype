@@ -1,6 +1,7 @@
 // lib/main.dart
 
 import 'package:flutter/material.dart';
+import 'package:prototype/viewmodels/session_viewmodel.dart';
 import 'package:provider/provider.dart';
 
 // 1. Import all your ViewModels and the HomePage
@@ -21,9 +22,10 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => VqaViewModel()),
         ChangeNotifierProvider(create: (_) => OcrViewModel()),
         ChangeNotifierProvider(create: (_) => VideoAnalysisViewModel()),
+        ChangeNotifierProvider(create: (_) => SessionViewModel()),
       ],
       child: MaterialApp(
-        title: 'AI Visual Assistant',
+        title: 'AuraLnes',
         theme: ThemeData(
           primarySwatch: Colors.blue,
           visualDensity: VisualDensity.adaptivePlatformDensity,
