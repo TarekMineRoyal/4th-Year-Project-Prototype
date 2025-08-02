@@ -13,6 +13,7 @@ venv/
 # Exclude generated/processed data
 analyzed/
 uploads/
+storage/
 
 # Exclude large binary files (e.g., pre-trained models)
 *.pt  # Example: yolov8n.pt

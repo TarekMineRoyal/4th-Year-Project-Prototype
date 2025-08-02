@@ -19,6 +19,7 @@ class SessionCreationResult(BaseModel):
 
 # OUTPUT for the /query endpoint
 class SessionQueryResult(BaseModel):
+    session_id: str
     answer: str
 
 # Internal model for storing session state

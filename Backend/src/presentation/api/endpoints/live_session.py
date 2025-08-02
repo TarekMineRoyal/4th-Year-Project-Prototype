@@ -147,8 +147,8 @@ async def query_session_endpoint(
         return result
     except ValueError as e:
         # This catches the error if the session ID is not found
-        logger.warning("API: Query for non-existent session.", session_id=request.session_id)
+        logger.warning("API: Query for non-existent session.", session_id=session_id)
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        logger.exception("API: Error handling query request.", session_id=request.session_id)
+        logger.exception("API: Error handling query request.", session_id=session_id)
         raise HTTPException(status_code=500, detail=f"Error answering question: {e}")
