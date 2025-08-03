@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../viewmodels/ocr_viewmodel.dart';
-import '../viewmodels/models_viewmodel.dart'; // Import ModelsViewModel
+import '../viewmodels/models_viewmodel.dart';
 
 class OCRScreen extends StatefulWidget {
   const OCRScreen({super.key});
@@ -18,10 +18,6 @@ class _OCRScreenState extends State<OCRScreen> {
   final ImagePicker _picker = ImagePicker();
   File? _image;
 
-  // --- REMOVED: State variable is now in the ViewModel ---
-  // String? _selectedModel;
-
-  // --- UPDATED: Simplified method ---
   Future<void> _pickImageAndAnalyze() async {
     try {
       final pickedFile = await _picker.pickImage(source: ImageSource.camera);
@@ -29,10 +25,11 @@ class _OCRScreenState extends State<OCRScreen> {
         setState(() {
           _image = File(pickedFile.path);
         });
-        // The ViewModel already knows the selected model.
+        // The result will be announced automatically by the live region.
         context.read<OcrViewModel>().fetchOcrResult(_image!.path);
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text("Failed to pick image: $e")));
@@ -41,7 +38,6 @@ class _OCRScreenState extends State<OCRScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Watch the OcrViewModel for state changes.
     final ocrViewModel = context.watch<OcrViewModel>();
 
     return Scaffold(
@@ -56,10 +52,9 @@ class _OCRScreenState extends State<OCRScreen> {
           children: [
             _buildImageDisplay(),
             const SizedBox(height: 20),
-            // The builder method now takes the ViewModel as a parameter
-            _buildModelSelector(ocrViewModel),
-            const SizedBox(height: 20),
             _buildScanButton(ocrViewModel.isLoading),
+            const SizedBox(height: 24),
+            _buildModelSelector(ocrViewModel),
             const SizedBox(height: 30),
             _buildResultDisplay(ocrViewModel),
           ],
@@ -69,73 +64,77 @@ class _OCRScreenState extends State<OCRScreen> {
   }
 
   Widget _buildImageDisplay() {
-    return Container(
-      height: 250,
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade400),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child:
+    return Semantics(
+      label:
           _image == null
-              ? const Center(child: Text("Point camera at text to read."))
-              : ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.file(_image!, fit: BoxFit.cover),
-              ),
+              ? "No image selected. Use the scan button below to take a picture of text."
+              : "A preview of the image to be scanned for text.",
+      child: Container(
+        height: 250,
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade400),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child:
+            _image == null
+                ? const Center(child: Text("Point camera at text to read."))
+                : ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.file(_image!, fit: BoxFit.cover),
+                ),
+      ),
     );
   }
 
-  // --- UPDATED WIDGET: Now driven by OcrViewModel state ---
+  Widget _buildScanButton(bool isLoading) {
+    return Semantics(
+      label:
+          "Scan Text Button. Double tap to activate the camera and read text.",
+      button: true,
+      excludeSemantics: true,
+      child: ElevatedButton.icon(
+        onPressed: isLoading ? null : _pickImageAndAnalyze,
+        icon: const Icon(Icons.camera_enhance),
+        label: const Text("Scan Text"),
+        style: ElevatedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          backgroundColor: Colors.green,
+          foregroundColor: Colors.white,
+        ),
+      ),
+    );
+  }
+
   Widget _buildModelSelector(OcrViewModel ocrViewModel) {
     final modelsViewModel = context.watch<ModelsViewModel>();
     final ocrModels = modelsViewModel.models['OCR'] ?? [];
 
-    if (modelsViewModel.isLoading) {
-      return const Center(child: Text("Loading AI models..."));
-    }
-    if (modelsViewModel.errorMessage != null) {
-      return Center(
-        child: Text(
-          "Error: ${modelsViewModel.errorMessage}",
-          style: const TextStyle(color: Colors.red),
-        ),
-      );
-    }
-    if (ocrModels.isEmpty) {
-      return const Center(child: Text("No OCR models available from server."));
+    if (modelsViewModel.isLoading || ocrModels.isEmpty) {
+      return const SizedBox.shrink(); // Don't show if loading or no models
     }
 
-    // Set the default model in the ViewModel if it's not set and models are available
     if (ocrViewModel.selectedModel == null && ocrModels.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ocrViewModel.setModel(ocrModels.first);
       });
     }
 
-    return DropdownButtonFormField<String>(
-      value: ocrViewModel.selectedModel,
-      decoration: const InputDecoration(
-        labelText: 'AI Model',
-        border: OutlineInputBorder(),
-      ),
-      items:
-          ocrModels.map((model) {
-            return DropdownMenuItem(value: model, child: Text(model));
-          }).toList(),
-      // Call the ViewModel's method on change
-      onChanged: (value) => ocrViewModel.setModel(value),
-    );
-  }
-
-  Widget _buildScanButton(bool isLoading) {
-    return ElevatedButton.icon(
-      onPressed: isLoading ? null : _pickImageAndAnalyze,
-      icon: const Icon(Icons.camera_enhance),
-      label: const Text("Scan Text"),
-      style: ElevatedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        backgroundColor: Colors.green,
-        foregroundColor: Colors.white,
+    return Semantics(
+      label:
+          "Select AI Model for text recognition. Current model is ${ocrViewModel.selectedModel ?? 'not selected'}.",
+      child: DropdownButtonFormField<String>(
+        value: ocrViewModel.selectedModel,
+        decoration: const InputDecoration(
+          labelText: 'AI Model',
+          border: OutlineInputBorder(),
+        ),
+        items:
+            ocrModels
+                .map(
+                  (model) => DropdownMenuItem(value: model, child: Text(model)),
+                )
+                .toList(),
+        onChanged: (value) => ocrViewModel.setModel(value),
       ),
     );
   }
@@ -144,45 +143,45 @@ class _OCRScreenState extends State<OCRScreen> {
     if (ocrViewModel.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (ocrViewModel.errorMessage != null) {
-      return Center(
-        child: Text(
-          "Error: ${ocrViewModel.errorMessage}",
-          style: const TextStyle(color: Colors.red, fontSize: 16),
-          textAlign: TextAlign.center,
-        ),
-      );
-    }
-    if (ocrViewModel.ocrResult != null) {
-      final result = ocrViewModel.ocrResult!;
-      final processingTime = result.processingTime.toStringAsFixed(2);
 
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.green.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Column(
-          children: [
-            SelectableText(
-              result.text.isEmpty ? "No text found." : result.text,
-              style: const TextStyle(fontSize: 16),
-              textAlign: TextAlign.left,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              "Processed in $processingTime seconds",
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey.shade600,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          ],
-        ),
-      );
+    String? announcement;
+    if (ocrViewModel.errorMessage != null) {
+      announcement = "Error: ${ocrViewModel.errorMessage}";
+    } else if (ocrViewModel.ocrResult != null) {
+      announcement =
+          ocrViewModel.ocrResult!.text.isEmpty
+              ? "No text was found in the image."
+              : "Detected text: ${ocrViewModel.ocrResult!.text}";
     }
-    return const SizedBox.shrink();
+
+    // This Semantics widget is key. 'liveRegion: true' makes screen readers
+    // automatically announce the content as soon as it appears or changes.
+    return Semantics(
+      liveRegion: true,
+      child:
+          announcement == null
+              ? const SizedBox.shrink()
+              : Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color:
+                      ocrViewModel.errorMessage != null
+                          ? Colors.red.withOpacity(0.1)
+                          : Colors.green.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: SelectableText(
+                  announcement,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color:
+                        ocrViewModel.errorMessage != null
+                            ? Colors.red
+                            : Colors.black87,
+                  ),
+                  textAlign: TextAlign.left,
+                ),
+              ),
+    );
   }
 }
