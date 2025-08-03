@@ -1,0 +1,38 @@
+# Available models for each feature
+# 'selectable: true' means the user can choose from the 'models' list.
+# 'selectable: false' means the backend enforces the model(s) listed.
+
+vqa:
+  selectable: true
+  models:
+    - "gemini-2.5-flash"
+    - "gemini-2.5-pro"
+
+ocr:
+  selectable: true
+  models:
+    - "gemini-2.5-flash"
+    - "gemini-2.5-pro"
+
+video_scene_qa:
+  selectable: true
+  models:
+    - "gemini-2.5-flash"
+    - "gemini-2.5-pro"
+
+# --- Forced Models (Not user-selectable) ---
+
+video_scene_extractor:
+  selectable: false
+  models:
+    - "gemini-2.5-flash"
+
+video_scene_aggregator:
+  selectable: false
+  models:
+    - "gemini-2.5-flash"
+
+objects_extractor:
+  selectable: false
+  models:
+    - "gemini-2.5-pro"

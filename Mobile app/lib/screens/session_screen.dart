@@ -1,8 +1,11 @@
+// lib/screens/session_screen.dart
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:provider/provider.dart';
 import '../viewmodels/session_viewmodel.dart';
+import '../viewmodels/models_viewmodel.dart'; // Import ModelsViewModel
 
 class SessionScreen extends StatefulWidget {
   const SessionScreen({super.key});
@@ -15,23 +18,17 @@ class _SessionScreenState extends State<SessionScreen> {
   CameraController? _cameraController;
   final TextEditingController _questionController = TextEditingController();
 
-  // --- SOLUTION PART 1: Add a member variable for the ViewModel ---
-  // We use 'late final' because we promise to initialize it in initState
-  // and it will never be changed afterwards.
   late final SessionViewModel _viewModel;
-
   bool _isRecordingVideo = false;
+
+  final List<String> _analysisModes = ['Brief', 'Thorough'];
 
   @override
   void initState() {
     super.initState();
-
-    // --- SOLUTION PART 2: Initialize the ViewModel reference here ---
-    // The context is safe to use inside initState.
     _viewModel = context.read<SessionViewModel>();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Now use the safe, stored reference to call the method.
       _viewModel.initializeSession();
     });
 
@@ -42,52 +39,41 @@ class _SessionScreenState extends State<SessionScreen> {
   void dispose() {
     _cameraController?.dispose();
     _questionController.dispose();
-
-    // --- SOLUTION PART 3: Use the safe reference in dispose ---
-    // We are no longer using the unsafe 'context' here.
     _viewModel.stopRecording();
-
     super.dispose();
   }
 
-  /// Finds an available camera and sets up the CameraController.
   Future<void> _initializeCamera() async {
-    final cameras = await availableCameras();
-    final firstCamera = cameras.first;
-
-    _cameraController = CameraController(
-      firstCamera,
-      ResolutionPreset.high,
-      enableAudio: false,
-      imageFormatGroup: ImageFormatGroup.jpeg,
-    );
-
     try {
+      final cameras = await availableCameras();
+      final firstCamera = cameras.first;
+
+      _cameraController = CameraController(
+        firstCamera,
+        ResolutionPreset.high,
+        enableAudio: false,
+        imageFormatGroup: ImageFormatGroup.jpeg,
+      );
+
       await _cameraController!.initialize();
-      if (mounted) {
-        setState(() {});
-      }
+      if (mounted) setState(() {});
     } catch (e) {
       print("Error initializing camera: $e");
     }
   }
 
-  /// The function that will be passed to the ViewModel to handle frame capture.
   Future<void> _captureFrame() async {
     if (_cameraController == null || !_cameraController!.value.isInitialized) {
       return;
     }
     try {
       final image = await _cameraController!.takePicture();
-      // It's fine to use context.read here because this method is only called
-      // while the widget is active and recording.
       context.read<SessionViewModel>().processCapturedFrame(image.path);
     } catch (e) {
       print("Error capturing frame: $e");
     }
   }
 
-  /// The function that will be passed to the ViewModel to handle video capture.
   Future<void> _captureVideo() async {
     if (_cameraController == null ||
         !_cameraController!.value.isInitialized ||
@@ -95,9 +81,7 @@ class _SessionScreenState extends State<SessionScreen> {
       return;
     }
 
-    setState(() {
-      _isRecordingVideo = true;
-    });
+    setState(() => _isRecordingVideo = true);
 
     try {
       await _cameraController!.startVideoRecording();
@@ -107,15 +91,20 @@ class _SessionScreenState extends State<SessionScreen> {
     } catch (e) {
       print("Error capturing video: $e");
     } finally {
-      setState(() {
-        _isRecordingVideo = false;
-      });
+      setState(() => _isRecordingVideo = false);
+    }
+  }
+
+  void _submitQuestion() {
+    if (_questionController.text.isNotEmpty) {
+      _viewModel.askQuestion(_questionController.text);
+      _questionController.clear();
+      FocusScope.of(context).unfocus();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // context.watch is the correct way to listen to changes in the build method.
     final viewModel = context.watch<SessionViewModel>();
 
     return Scaffold(
@@ -128,8 +117,6 @@ class _SessionScreenState extends State<SessionScreen> {
       ),
     );
   }
-
-  // --- Builder Methods (unchanged) ---
 
   Widget _buildCameraPreview() {
     if (_cameraController == null || !_cameraController!.value.isInitialized) {
@@ -150,6 +137,8 @@ class _SessionScreenState extends State<SessionScreen> {
             _buildModeSwitcher(viewModel),
             const SizedBox(height: 16),
             _buildRecordButton(viewModel),
+            const SizedBox(height: 24),
+            _buildModelSelectors(viewModel),
             const SizedBox(height: 16),
             _buildQuestionArea(viewModel),
             const SizedBox(height: 16),
@@ -157,6 +146,76 @@ class _SessionScreenState extends State<SessionScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  // --- UPDATED WIDGET: Driven by SessionViewModel state ---
+  Widget _buildModelSelectors(SessionViewModel sessionViewModel) {
+    final modelsViewModel = context.watch<ModelsViewModel>();
+    final vqaModels = modelsViewModel.models['VQA'] ?? [];
+
+    if (modelsViewModel.isLoading) {
+      return const Center(child: Text("Loading AI models..."));
+    }
+    if (modelsViewModel.errorMessage != null) {
+      return Center(
+        child: Text(
+          "Error: ${modelsViewModel.errorMessage}",
+          style: const TextStyle(color: Colors.red),
+        ),
+      );
+    }
+    if (vqaModels.isEmpty) {
+      return const Center(child: Text("No QA models available from server."));
+    }
+
+    // Set default model in the ViewModel if it's not set
+    if (sessionViewModel.selectedModel == null && vqaModels.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        sessionViewModel.setModel(vqaModels.first);
+      });
+    }
+
+    return Row(
+      children: [
+        // Model Dropdown
+        Expanded(
+          flex: 2,
+          child: DropdownButtonFormField<String>(
+            value: sessionViewModel.selectedModel,
+            decoration: const InputDecoration(
+              labelText: 'AI Model',
+              border: OutlineInputBorder(),
+            ),
+            items:
+                vqaModels.map((model) {
+                  return DropdownMenuItem(value: model, child: Text(model));
+                }).toList(),
+            onChanged: (value) => sessionViewModel.setModel(value),
+          ),
+        ),
+        const SizedBox(width: 16),
+        // Mode Dropdown
+        Expanded(
+          flex: 1,
+          child: DropdownButtonFormField<String>(
+            value: sessionViewModel.selectedMode?.replaceFirst(
+              sessionViewModel.selectedMode![0],
+              sessionViewModel.selectedMode![0].toUpperCase(),
+            ),
+            decoration: const InputDecoration(
+              labelText: 'Mode',
+              border: OutlineInputBorder(),
+            ),
+            items:
+                _analysisModes.map((mode) {
+                  return DropdownMenuItem(value: mode, child: Text(mode));
+                }).toList(),
+            onChanged:
+                (value) => sessionViewModel.setMode(value?.toLowerCase()),
+          ),
+        ),
+      ],
     );
   }
 
@@ -178,12 +237,6 @@ class _SessionScreenState extends State<SessionScreen> {
       onSelectionChanged: (newSelection) {
         viewModel.switchMode(newSelection.first);
       },
-      style: ButtonStyle(
-        foregroundColor: MaterialStateProperty.resolveWith<Color?>(
-          (states) =>
-              states.contains(MaterialState.disabled) ? Colors.grey : null,
-        ),
-      ),
     );
   }
 
@@ -219,16 +272,13 @@ class _SessionScreenState extends State<SessionScreen> {
               hintText: "Ask a question...",
               border: OutlineInputBorder(),
             ),
-            onSubmitted: (_) => _submitQuestion(viewModel),
+            onSubmitted: (_) => _submitQuestion(),
           ),
         ),
         const SizedBox(width: 8),
         IconButton(
           icon: const Icon(Icons.send),
-          onPressed:
-              viewModel.isAskingQuestion
-                  ? null
-                  : () => _submitQuestion(viewModel),
+          onPressed: viewModel.isAskingQuestion ? null : _submitQuestion,
           style: IconButton.styleFrom(
             backgroundColor: Theme.of(context).primaryColor,
             foregroundColor: Colors.white,
@@ -236,14 +286,6 @@ class _SessionScreenState extends State<SessionScreen> {
         ),
       ],
     );
-  }
-
-  void _submitQuestion(SessionViewModel viewModel) {
-    if (_questionController.text.isNotEmpty) {
-      viewModel.askQuestion(_questionController.text);
-      _questionController.clear();
-      FocusScope.of(context).unfocus();
-    }
   }
 
   Widget _buildAnswerDisplay(SessionViewModel viewModel) {

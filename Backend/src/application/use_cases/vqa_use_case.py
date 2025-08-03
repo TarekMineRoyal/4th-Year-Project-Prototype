@@ -5,6 +5,7 @@ from src.application.services.dataset_service import DatasetService
 from src.domain.entities import VQARequest, VQAResult
 from src.application.services.vision_service import VisionService
 from src.application.services.storage_service import StorageService
+from src.infrastructure.prompt_loader import prompt_loader
 
 logger = structlog.get_logger(__name__)
 
@@ -29,15 +30,19 @@ class VQAUseCase:
             )
             logger.info("VQA image saved to storage.", path=analyzed_path)
 
-            system_prompt = """You are a helpful and cautious AI assistant for a visually impaired user.
-            Your primary goal is to provide clear, accurate, and safe information about the user's surroundings based on an image.
-            Follow these rules for every response:
-            1. Safety First: Your absolute first priority is the user's safety. If you see any potential hazards (sharp objects, hot surfaces, obstacles, spills, things that might fall), mention them clearly and upfront before answering the user's question, if there is none do not mention the hazards at all.
-            2. Be Direct: Directly answer the user's specific question first.
-            3. Be Concise: After answering the question, you may add one brief, relevant sentence of context if necessary. Avoid long, poetic descriptions.
-            4. State Uncertainty: If you are not sure about something, say so clearly. It is better to say "I can't be certain" than to guess."""
+            # 1. Get the prompt for the selected mode.
+            mode_prompt = prompt_loader.get(f'prompt_mode.{request.mode.value}')
 
-            prompt = f"{system_prompt}\n\nUser's Question: '''{request.question}'''"
+            # 2. Get the main system persona template and inject the mode prompt.
+            system_prompt = prompt_loader.get('vqa.system_persona', mode_prompt=mode_prompt)
+
+            # 3. Construct the final prompt for the user's question.
+            prompt = prompt_loader.get(
+                'vqa.user_question_template',
+                system_prompt=system_prompt,
+                question=request.question
+            )
+
 
             logger.info("Calling vision service for VQA analysis.", model_option=request.model_option)
 

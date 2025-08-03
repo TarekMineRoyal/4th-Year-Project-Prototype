@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../viewmodels/vqa_viewmodel.dart';
+import '../viewmodels/models_viewmodel.dart'; // Import ModelsViewModel
 
 class VQAScreen extends StatefulWidget {
   const VQAScreen({super.key});
@@ -18,8 +19,11 @@ class _VQAScreenState extends State<VQAScreen> {
   final ImagePicker _picker = ImagePicker();
   File? _image;
 
-  // This is UI-level logic to handle picking an image and updating the local state.
-  // It's appropriate to keep it here in the State class.
+  // --- REMOVED: State variables are now in the ViewModel ---
+  // String? _selectedModel;
+  // String _selectedMode = 'Brief';
+  final List<String> _analysisModes = ['Brief', 'Thorough'];
+
   Future<void> _pickImage() async {
     try {
       final pickedFile = await _picker.pickImage(source: ImageSource.camera);
@@ -36,7 +40,7 @@ class _VQAScreenState extends State<VQAScreen> {
     }
   }
 
-  // This method delegates the business logic to the ViewModel.
+  // --- UPDATED: Simplified method ---
   void _getAnswer() {
     if (_image == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -51,6 +55,7 @@ class _VQAScreenState extends State<VQAScreen> {
       return;
     }
 
+    // The ViewModel already knows the selected model and mode.
     context.read<VqaViewModel>().fetchVqaResult(
       _image!.path,
       _questionController.text,
@@ -65,6 +70,9 @@ class _VQAScreenState extends State<VQAScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Watch the VqaViewModel for state changes.
+    final vqaViewModel = context.watch<VqaViewModel>();
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Visual Question Answering"),
@@ -77,14 +85,16 @@ class _VQAScreenState extends State<VQAScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Use private builder methods to keep the build method clean.
               _buildImagePicker(),
+              const SizedBox(height: 24),
+              // The building of model selectors now takes the ViewModel as a parameter
+              _buildModelSelectors(vqaViewModel),
               const SizedBox(height: 24),
               _buildQuestionInput(),
               const SizedBox(height: 16),
               _buildSubmitButton(),
               const SizedBox(height: 30),
-              _buildResultDisplay(),
+              _buildResultDisplay(vqaViewModel),
             ],
           ),
         ),
@@ -92,7 +102,6 @@ class _VQAScreenState extends State<VQAScreen> {
     );
   }
 
-  // Widget for displaying the image and the button to take a picture.
   Widget _buildImagePicker() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -124,7 +133,76 @@ class _VQAScreenState extends State<VQAScreen> {
     );
   }
 
-  // Widget for the question text field.
+  // --- UPDATED WIDGET: Now driven by VqaViewModel state ---
+  Widget _buildModelSelectors(VqaViewModel vqaViewModel) {
+    final modelsViewModel = context.watch<ModelsViewModel>();
+    final vqaModels = modelsViewModel.models['VQA'] ?? [];
+
+    if (modelsViewModel.isLoading) {
+      return const Center(child: Text("Loading AI models..."));
+    }
+    if (modelsViewModel.errorMessage != null) {
+      return Center(
+        child: Text(
+          "Error loading models: ${modelsViewModel.errorMessage}",
+          style: const TextStyle(color: Colors.red),
+        ),
+      );
+    }
+    if (vqaModels.isEmpty) {
+      return const Center(child: Text("No VQA models available from server."));
+    }
+
+    // Set the default model in the ViewModel if it's not set and models are available
+    if (vqaViewModel.selectedModel == null && vqaModels.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        vqaViewModel.setModel(vqaModels.first);
+      });
+    }
+
+    return Row(
+      children: [
+        Expanded(
+          flex: 2,
+          child: DropdownButtonFormField<String>(
+            value: vqaViewModel.selectedModel,
+            decoration: const InputDecoration(
+              labelText: 'AI Model',
+              border: OutlineInputBorder(),
+            ),
+            items:
+                vqaModels.map((model) {
+                  return DropdownMenuItem(value: model, child: Text(model));
+                }).toList(),
+            // Call the ViewModel's method on change
+            onChanged: (value) => vqaViewModel.setModel(value),
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          flex: 1,
+          child: DropdownButtonFormField<String>(
+            // Use capitalize logic for display if mode is stored as lowercase
+            value: vqaViewModel.selectedMode?.replaceFirst(
+              vqaViewModel.selectedMode![0],
+              vqaViewModel.selectedMode![0].toUpperCase(),
+            ),
+            decoration: const InputDecoration(
+              labelText: 'Mode',
+              border: OutlineInputBorder(),
+            ),
+            items:
+                _analysisModes.map((mode) {
+                  return DropdownMenuItem(value: mode, child: Text(mode));
+                }).toList(),
+            // Call the ViewModel's method on change
+            onChanged: (value) => vqaViewModel.setMode(value?.toLowerCase()),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildQuestionInput() {
     return TextField(
       controller: _questionController,
@@ -135,9 +213,7 @@ class _VQAScreenState extends State<VQAScreen> {
     );
   }
 
-  // Widget for the submit button.
   Widget _buildSubmitButton() {
-    // Listen to only the isLoading state for this button.
     final isLoading = context.select((VqaViewModel vm) => vm.isLoading);
     return ElevatedButton(
       onPressed: isLoading ? null : _getAnswer,
@@ -150,14 +226,10 @@ class _VQAScreenState extends State<VQAScreen> {
     );
   }
 
-  // Widget to display the result, loading indicator, or an error message.
-  Widget _buildResultDisplay() {
-    final vqaViewModel = context.watch<VqaViewModel>();
-
+  Widget _buildResultDisplay(VqaViewModel vqaViewModel) {
     if (vqaViewModel.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
-
     if (vqaViewModel.errorMessage != null) {
       return Center(
         child: Text(
@@ -167,23 +239,35 @@ class _VQAScreenState extends State<VQAScreen> {
         ),
       );
     }
-
     if (vqaViewModel.vqaResult != null) {
+      final result = vqaViewModel.vqaResult!;
+      final processingTime = result.processingTime.toStringAsFixed(2);
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.blue.withOpacity(0.1),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Text(
-          "Answer: ${vqaViewModel.vqaResult!.answer}",
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          textAlign: TextAlign.center,
+        child: Column(
+          children: [
+            Text(
+              "Answer: ${result.answer}",
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              "Processed in $processingTime seconds",
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey.shade600,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
         ),
       );
     }
-
-    // Return an empty container if there's no result, error, or loading state.
     return const SizedBox.shrink();
   }
 }

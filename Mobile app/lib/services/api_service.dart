@@ -9,6 +9,7 @@ import '../models/ocr_result.dart';
 import '../models/session_question_result.dart';
 import '../models/video_processing_result.dart';
 import '../models/user_init_response.dart';
+import '../viewmodels/models_viewmodel.dart';
 import 'settings_service.dart';
 import 'user_service.dart';
 
@@ -24,10 +25,9 @@ class ApiService {
     return "http://$ip:8000/api/v1";
   }
 
-  // Helper method to create a multipart file with the correct content type
   Future<http.MultipartFile> _createImageFile(String path) async {
     final fileExt = path.split('.').last.toLowerCase();
-    final contentType = // MediaType('image', fileExt);
+    final contentType =
         fileExt == 'png'
             ? MediaType('image', 'png')
             : MediaType('image', 'jpeg');
@@ -40,11 +40,32 @@ class ApiService {
   }
 
   // --- PUBLIC API METHODS ---
-  // These are the methods that the ViewModels will call.
+
+  Future<ModelMap> getModels() async {
+    final baseUrl = await _getBaseUrl();
+    final uri = Uri.parse('$baseUrl/models/');
+    final response = await http.get(uri);
+
+    if (response.statusCode == 200) {
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      final models = body.map((key, value) {
+        final modelList = (value as List).cast<String>();
+        return MapEntry(key, modelList);
+      });
+      return models;
+    } else {
+      throw Exception(
+        'Failed to get models: ${response.statusCode} - ${response.body}',
+      );
+    }
+  }
+
+  // --- UPDATED METHOD SIGNATURE ---
   Future<VqaResult> getVqaResult(
     String imagePath,
     String question,
-    // The "modelOption" parameter is REMOVED.
+    String modelOption, // ADDED
+    String mode, // ADDED
   ) async {
     final baseUrl = await _getBaseUrl();
     final userId = await _userService.getUserId();
@@ -56,7 +77,9 @@ class ApiService {
         http.MultipartRequest('POST', uri)
           ..headers['X-User-ID'] = userId
           ..fields['question'] = question
-          // The "option" field is REMOVED from the request.
+          // --- ADDED fields for model and mode ---
+          ..fields['model_option'] = modelOption
+          ..fields['mode'] = mode
           ..files.add(await _createImageFile(imagePath));
 
     var response = await request.send();
@@ -72,14 +95,15 @@ class ApiService {
     }
   }
 
-  // --- OCR and Video Analysis methods are unchanged for now ---
-  Future<OcrResult> getOcrResult(String imagePath) async {
-    // The "modelOption" parameter is REMOVED.
+  // --- UPDATED METHOD SIGNATURE ---
+  Future<OcrResult> getOcrResult(String imagePath, String modelOption) async {
     final baseUrl = await _getBaseUrl();
     var uri = Uri.parse('$baseUrl/ocr/');
-    var request = http.MultipartRequest('POST', uri)
-      // The "option" field is REMOVED from the request.
-      ..files.add(await _createImageFile(imagePath));
+    var request =
+        http.MultipartRequest('POST', uri)
+          // --- ADDED field for model ---
+          ..fields['model_option'] = modelOption
+          ..files.add(await _createImageFile(imagePath));
 
     var response = await request.send();
 
@@ -109,23 +133,26 @@ class ApiService {
     }
   }
 
+  // --- UPDATED METHOD SIGNATURE ---
   Future<SessionQuestionResult> askQuestion(
     String sessionId,
     String question,
+    String modelOption, // ADDED
+    String mode, // ADDED
   ) async {
     final baseUrl = await _getBaseUrl();
     final uri = Uri.parse('$baseUrl/session/query');
 
-    // The backend expects 'x-www-form-urlencoded' data because it uses Form(...).
-    // To send this, we create a Map of the fields.
-    final requestBody = {'session_id': sessionId, 'question': question};
+    // --- ADDED model and mode to the request body ---
+    final requestBody = {
+      'session_id': sessionId,
+      'question': question,
+      'model_option': modelOption,
+      'mode': mode,
+    };
 
-    // When you pass a Map<String, String> directly to the body of http.post,
-    // the http package automatically encodes it as form data and sets the
-    // correct 'Content-Type' header. We do NOT use jsonEncode here.
     final response = await http.post(uri, body: requestBody);
 
-    // The rest of the logic for handling the response is the same.
     if (response.statusCode == 200) {
       return SessionQuestionResult.fromJson(jsonDecode(response.body));
     } else {
@@ -145,17 +172,14 @@ class ApiService {
     var request = http.MultipartRequest('POST', uri)
       ..fields['session_id'] = sessionId;
 
-    // 1. Determine the file extension.
     final fileExt = imagePath.split('.').last.toLowerCase();
-    // 2. Create the correct MediaType. This handles both jpg and jpeg.
     final contentType = MediaType('image', fileExt == 'png' ? 'png' : 'jpeg');
 
-    // 3. Add the file with the EXPLICIT content type.
     request.files.add(
       await http.MultipartFile.fromPath(
         'image_frame',
         imagePath,
-        contentType: contentType, // Set the content type here
+        contentType: contentType,
       ),
     );
     var response = await request.send();
@@ -202,12 +226,9 @@ class ApiService {
     }
   }
 
-  // This method is called once when the app starts to get a user ID.
   Future<void> initializeUser() async {
-    // First, check if a user ID already exists.
     final existingUserId = await _userService.getUserId();
     if (existingUserId == null) {
-      // If no ID exists, fetch a new one from the backend.
       final baseUrl = await _getBaseUrl();
       final uri = Uri.parse('$baseUrl/users/init');
       try {
@@ -218,13 +239,11 @@ class ApiService {
           );
           await _userService.setUserId(responseBody.userId);
         } else {
-          // Handle cases where the server fails to provide an ID.
           throw Exception(
             'Failed to initialize user: ${response.statusCode} - ${response.body}',
           );
         }
       } catch (e) {
-        // Handle network errors or other exceptions.
         throw Exception('Could not connect to the server to initialize user.');
       }
     }

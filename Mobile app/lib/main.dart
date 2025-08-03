@@ -9,6 +9,7 @@ import 'viewmodels/vqa_viewmodel.dart';
 import 'viewmodels/ocr_viewmodel.dart';
 import 'viewmodels/home_viewmodel.dart';
 import 'screens/home_screen.dart';
+import 'viewmodels/models_viewmodel.dart';
 
 // The main entry point of the application.
 void main() async {
@@ -28,6 +29,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => OcrViewModel()),
         ChangeNotifierProvider(create: (_) => SessionViewModel()),
         ChangeNotifierProvider(create: (_) => HomeViewModel()),
+        ChangeNotifierProvider(create: (_) => ModelsViewModel()),
       ],
       child: MaterialApp(
         title: 'AuraLnes',

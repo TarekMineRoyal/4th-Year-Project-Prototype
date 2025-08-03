@@ -12,7 +12,7 @@ from google.api_core import exceptions as google_exceptions
 from src.application.services.vision_service import VisionService
 from src.domain.entities import AnalysisResult
 from src.domain.entities import VideoFile, ImageFile
-from src.presentation.api.endpoints.config import ACTIVE_MODELS_CONFIG
+from src.infrastructure.prompt_loader import prompt_loader
 
 logger = structlog.get_logger(__name__)
 
@@ -21,7 +21,7 @@ class GeminiVisionService(VisionService):
     A concrete implementation of the VisionService that uses the Google Gemini API.
     """
 
-    def __init__(self, timeout: int):
+    def __init__(self, timeout: int, models_config: dict):
         """
         Initializes the Gemini Vision Service.
         Configures the genai library with an API key if provided.
@@ -29,6 +29,7 @@ class GeminiVisionService(VisionService):
         #if api_key:
         #    genai.configure(api_key=api_key)
         self.timeout = timeout
+        self.models_config = models_config
         logger.info("GeminiVisionService initialized.", timeout=self.timeout)
 
     def analyze_image(
@@ -209,18 +210,19 @@ class GeminiVisionService(VisionService):
         """
         Analyzes an image and returns a list of objects, tailored for the blind.
         """
-        prompt = (
-            "Analyze the provided image. Identify all distinct objects. "
-            "Return a JSON list of strings. Each string should be a simple, "
-            "clear description of one object. For example: "
-            '["a red coffee mug", "a silver laptop", "a pair of black glasses"]. '
-            "Ensure the output is only the JSON list and nothing else."
-        )
+        prompt = prompt_loader.get('gemini_vision.json_object_detection')
         try:
+
+            object_extractor_model_config = self.models_config.get("objects_extractor", {}).get("models")
+            if not object_extractor_model_config or not object_extractor_model_config[0]:
+                logger.error("Server config error: 'objects_extractor' model is not defined.")
+                # Return empty list as this is an internal service call, not a direct endpoint
+                return []
+
             img = Image.open(io.BytesIO(image.content))
             logger.debug("Sending request to Gemini API to analyze objects.")
 
-            model = genai.GenerativeModel(ACTIVE_MODELS_CONFIG.objects_extractor)
+            model = genai.GenerativeModel(object_extractor_model_config[0])
 
             # Pass the request_options to the generate_content call
             response = model.generate_content(

@@ -9,11 +9,12 @@ from src.infrastructure.config import get_settings, Settings
 from src.infrastructure.services.gemini_vision_service import GeminiVisionService
 from src.infrastructure.services.local_storage_service import LocalStorageService
 from src.infrastructure.services.mongo_dataset_service import MongoDatasetService
+from src.presentation.api.dependencies import get_models_config
 
 # --- Service Providers ---
 
-def get_vision_service(settings: Settings = Depends(get_settings)) -> VisionService:
-    return GeminiVisionService(timeout=settings.model_timeout_seconds)
+def get_vision_service(settings: Settings = Depends(get_settings), models_config: dict = Depends(get_models_config)) -> VisionService:
+    return GeminiVisionService(timeout=settings.model_timeout_seconds, models_config=models_config)
 
 def get_storage_service(settings: Settings = Depends(get_settings)) -> StorageService:
     return LocalStorageService(settings.storage_dir)

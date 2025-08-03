@@ -8,6 +8,7 @@ import 'ocr_screen.dart';
 import 'vqa_screen.dart';
 import 'session_screen.dart';
 import '../services/api_service.dart';
+import '../viewmodels/models_viewmodel.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -41,6 +42,7 @@ class _HomePageState extends State<HomePage> {
         // Add the mounted check here as well for safety.
         if (!mounted) return;
         context.read<HomeViewModel>().loadUserId();
+        context.read<ModelsViewModel>().fetchModels();
       } catch (e) {
         print("Failed to initialize user on startup: $e");
       }
@@ -96,6 +98,7 @@ class _HomePageState extends State<HomePage> {
 
                     // Now it's safe to use the context to refresh the ViewModel.
                     currentContext.read<HomeViewModel>().loadUserId();
+                    currentContext.read<ModelsViewModel>().fetchModels();
                   }
                 },
                 child: const Text("Save for this session"),

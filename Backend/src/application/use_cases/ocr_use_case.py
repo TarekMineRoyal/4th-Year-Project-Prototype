@@ -3,6 +3,7 @@ import structlog
 from src.domain.entities import OCRRequest, OCRResult
 from src.application.services.vision_service import VisionService
 from src.application.services.storage_service import StorageService
+from src.infrastructure.prompt_loader import prompt_loader
 
 logger = structlog.get_logger(__name__)
 
@@ -26,7 +27,7 @@ class OCRUseCase:
             )
             logger.info("OCR image saved to storage.", path=analyzed_path)
 
-            prompt = """Extract all text from the image. If there is no text say so."""
+            prompt = prompt_loader.get('ocr.text_extraction')
 
             logger.info("Calling ocr service for OCR analysis.", model_option=request.model_option)
 

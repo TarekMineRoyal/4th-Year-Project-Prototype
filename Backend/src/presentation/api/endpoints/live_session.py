@@ -10,7 +10,7 @@ from fastapi import (
     status,
 )
 
-from .config import ACTIVE_MODELS_CONFIG
+from src.presentation.api.dependencies import get_models_config
 from src.application.use_cases.live_session_use_case import LiveSessionUseCase
 from src.domain.entities import (
     ImageFile,
@@ -47,10 +47,14 @@ def start_session_endpoint(
 
 @router.post("/process-clip", status_code=status.HTTP_202_ACCEPTED)
 async def process_clip_endpoint(
+        # --- Dependencies ---
         background_tasks: BackgroundTasks,
+        use_case: LiveSessionUseCase = Depends(get_live_session_use_case),
+        models_config: dict = Depends(get_models_config),
+
+        # --- User Inputs ---
         session_id: str = Form(...),
         video_clip: UploadFile = File(...),
-        use_case: LiveSessionUseCase = Depends(get_live_session_use_case),
 ):
     """
     Accepts a video clip for asynchronous processing.
@@ -63,6 +67,23 @@ async def process_clip_endpoint(
         raise HTTPException(status_code=400, detail="Invalid file type. Only video files are allowed.")
 
     try:
+        # --- More Robust Way to Get Forced Models ---
+        extractor_config = models_config.get("video_scene_extractor", {}).get("models")
+        aggregator_config = models_config.get("video_scene_aggregator", {}).get("models")
+
+        # Ensure the config exists and has at least one model listed
+        if not extractor_config or not isinstance(extractor_config, list) or not extractor_config[0]:
+            logger.error("Server config error: 'video_scene_extractor' model is not defined.")
+            raise HTTPException(status_code=500, detail="Server configuration error for video processing.")
+
+        if not aggregator_config or not isinstance(aggregator_config, list) or not aggregator_config[0]:
+            logger.error("Server config error: 'video_scene_aggregator' model is not defined.")
+            raise HTTPException(status_code=500, detail="Server configuration error for video processing.")
+
+        # Now we can safely access the first model
+        extractor_model: str = extractor_config[0]
+        aggregator_model: str = aggregator_config[0]
+
         # Create the domain entity from the uploaded file
         video_file = VideoFile(
             filename=video_clip.filename,
@@ -72,8 +93,8 @@ async def process_clip_endpoint(
         # Create the request
         session_analysis_video_request = SessionAnalysVideoRequest(
             session_id= session_id,
-            analysis_model_option= ACTIVE_MODELS_CONFIG.video_scene_extractor,  # The analysis model
-            aggregation_model_option= ACTIVE_MODELS_CONFIG.video_scene_aggregator,  # The aggregator model
+            analysis_model_option= extractor_model,  # The analysis model
+            aggregation_model_option= aggregator_model,  # The aggregator model
             media= video_file
         )
         # Add the heavy processing to a background task
@@ -87,10 +108,14 @@ async def process_clip_endpoint(
 
 @router.post("/process-frame", status_code=status.HTTP_202_ACCEPTED)
 async def process_frame_endpoint(
+        # --- Dependencies ---
         background_tasks: BackgroundTasks,
+        use_case: LiveSessionUseCase = Depends(get_live_session_use_case),
+        models_config: dict = Depends(get_models_config),  # <-- Inject config
+
+        # --- User Inputs ---
         session_id: str = Form(...),
         image_frame: UploadFile = File(...),
-        use_case: LiveSessionUseCase = Depends(get_live_session_use_case),
 ):
     """
     Accepts a single image frame for asynchronous processing.
@@ -103,6 +128,21 @@ async def process_frame_endpoint(
         raise HTTPException(status_code=400, detail="Invalid file type. Only image files are allowed.")
 
     try:
+        # --- More Robust Way to Get Forced Models ---
+        extractor_config = models_config.get("video_scene_extractor", {}).get("models")
+        aggregator_config = models_config.get("video_scene_aggregator", {}).get("models")
+
+        if not extractor_config or not isinstance(extractor_config, list) or not extractor_config[0]:
+            logger.error("Server config error: 'video_scene_extractor' model is not defined.")
+            raise HTTPException(status_code=500, detail="Server configuration error for frame processing.")
+
+        if not aggregator_config or not isinstance(aggregator_config, list) or not aggregator_config[0]:
+            logger.error("Server config error: 'video_scene_aggregator' model is not defined.")
+            raise HTTPException(status_code=500, detail="Server configuration error for frame processing.")
+
+        extractor_model: str = extractor_config[0]
+        aggregator_model: str = aggregator_config[0]
+
         # Create the domain entity from the uploaded file
         image_file = ImageFile(
             filename=image_frame.filename,
@@ -113,8 +153,8 @@ async def process_frame_endpoint(
         # Create the request
         session_analysis_video_request = SessionAnalysVideoRequest(
             session_id=session_id,
-            analysis_model_option=ACTIVE_MODELS_CONFIG.video_scene_extractor,  # The analysis model
-            aggregation_model_option=ACTIVE_MODELS_CONFIG.video_scene_aggregator,  # The aggregator model
+            analysis_model_option=extractor_model,  # The analysis model
+            aggregation_model_option=aggregator_model,  # The aggregator model
             media=image_file
         )
         # Add the heavy processing to a background task
@@ -128,22 +168,46 @@ async def process_frame_endpoint(
 
 @router.post("/query", response_model=SessionQueryResult)
 async def query_session_endpoint(
+        # --- Dependencies ---
+        use_case: LiveSessionUseCase = Depends(get_live_session_use_case),
+        models_config: dict = Depends(get_models_config),  # <-- Inject config
+
+        # --- User Inputs ---
         session_id: str = Form(...),
         question: str = Form(...),
-        use_case: LiveSessionUseCase = Depends(get_live_session_use_case),
+        model_option: str = Form(...),
+        mode: str = Form(...),
 ):
     """
-    Accepts a question about a specific session and returns a direct answer
-    based on the session's current aggregated narrative. This is a synchronous request.
+    Accepts a question about a session and returns an answer.
     """
     logger.info("API: Received request to query session.", session_id=session_id)
 
+    # --- Model Validation ---
+    qa_models = models_config.get("video_scene_qa", {})
+    if not qa_models.get("selectable") or model_option not in qa_models.get("models", []):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid model '{model_option}' selected for Session QA.",
+        )
+
+    # --- Mode Validation ---
+    if mode.lower() == "brief":
+        analysis_mode = AnalysisMode.BRIEF
+    elif mode.lower() == "thorough":
+        analysis_mode = AnalysisMode.THOROUGH
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid analysis mode. Must be 'brief' or 'thorough'.",
+        )
+
     try:
         request = SessionQueryRequest(
-            session_id= session_id,
-            question= question,
-            model_option=ACTIVE_MODELS_CONFIG.video_scene_qa,
-            mode= AnalysisMode.BRIEF
+            session_id=session_id,
+            question=question,
+            model_option=model_option,  # <-- Use validated user input
+            mode=analysis_mode,  # <-- Use validated user input
         )
         result = await use_case.answer_question(request)
         return result

@@ -12,6 +12,7 @@ from src.application.services.vision_service import VisionService
 from src.application.services.storage_service import StorageService
 from .strategies import VideoSceneExtractor, FrameSceneExtractor
 from src.domain.entities.live_session import SessionAnalysVideoRequest
+from ...infrastructure.prompt_loader import prompt_loader
 
 # Get a logger instance for this module
 logger = structlog.get_logger(__name__)
@@ -21,7 +22,6 @@ SESSION_STORAGE: Dict[str, SessionState] = {}
 SESSION_LOCKS: Dict[str, threading.Lock] = {}
 
 
-# --- HELPER FUNCTION (Moved outside the class) ---
 def get_session(session_id: str) -> SessionState:
     """
     Retrieves the state for a given session ID from global storage.
@@ -58,11 +58,10 @@ def run_aggregation_task_worker(session_id: str, video_scene_aggregator_model: s
 
         # --- Perform the AI call outside the lock ---
         try:
-            aggregator_prompt = (
-                f"The story so far is: '{session.current_narrative}'. "
-                f"The following new event just happened: '{next_desc}'. "
-                "Combine these into a single, updated, coherent narrative. "
-                "Rewrite the story to naturally include the new event. Do not mention that this is an update."
+            aggregator_prompt = prompt_loader.get(
+            'live_session.narrative_aggregator',
+            current_narrative=session.current_narrative,
+            next_desc=next_desc
             )
             new_narrative = vision_service.analyze_text(
                 prompt=aggregator_prompt,
@@ -118,7 +117,7 @@ class LiveSessionUseCase:
             else:
                 extractor = FrameSceneExtractor(vision_service=self.vision_service)
 
-            scene_prompt = "Describe the events in this media concisely. Focus on actions, objects, and people."
+            scene_prompt = prompt_loader.get('scene_extraction.event_description')
             scene_description = extractor.extract_scene(
                 media=request.media,
                 prompt=scene_prompt,
@@ -149,7 +148,7 @@ class LiveSessionUseCase:
         except Exception:
             logger.exception("An error occurred during scene extraction.", session_id=request.session_id)
 
-    def answer_question(self, request: SessionQueryRequest) -> SessionQueryResult:
+    async def answer_question(self, request: SessionQueryRequest) -> SessionQueryResult:
         """
         Answers a user's question based on the most up-to-date narrative.
         """
@@ -162,13 +161,18 @@ class LiveSessionUseCase:
             session = get_session(request.session_id)
             current_narrative = session.current_narrative
 
-        qa_prompt = (
-            "You are an AI assistant answering questions for a visually impaired user based on a narrative of events. "
-            "Be direct and concise. Use only the provided context to answer.\n\n"
-            f"Context: '{current_narrative}'\n\n"
-            f"Question: '{request.question}'"
-        )
+            # 1. Get the prompt for the selected mode.
+            mode_prompt = prompt_loader.get(f'prompt_mode.{request.mode.value}')
+
+            # 2. Get the contextual QA template and render it.
+            qa_prompt = prompt_loader.get(
+                'live_session.contextual_qa',
+                mode_prompt=mode_prompt,
+                current_narrative=current_narrative,
+                question=request.question
+            )
+
         answer = self.vision_service.analyze_text(prompt=qa_prompt, model_option=request.model_option).text
 
         logger.info("Question answered.", session_id=request.session_id, answer_length=len(answer))
-        return SessionQueryResult(session_id = request.session_id, answer=answer.strip())
+        return SessionQueryResult(session_id=request.session_id, answer=answer.strip())

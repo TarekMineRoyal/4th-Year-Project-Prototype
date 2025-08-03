@@ -1,41 +1,77 @@
+// lib/viewmodels/session_viewmodel.dart
+
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../services/api_service.dart';
+import '../services/preference_service.dart'; // IMPORT THE NEW SERVICE
 
-// An enumeration to represent the two possible recording modes.
 enum RecordingMode { frames, video }
 
 class SessionViewModel extends ChangeNotifier {
-  // --- Dependencies ---
+  // --- DEPENDENCIES ---
   final ApiService _apiService = ApiService();
+  final PreferenceService _preferenceService =
+      PreferenceService(); // ADD THE SERVICE
 
-  // --- Private State Properties ---
+  // --- STATE ---
   String? _sessionId;
   Timer? _recordingTimer;
-
-  // --- Publicly Readable State ---
-
   RecordingMode _currentMode = RecordingMode.frames;
-  RecordingMode get currentMode => _currentMode;
-
   bool _isRecording = false;
-  bool get isRecording => _isRecording;
-
   bool _isAskingQuestion = false;
-  bool get isAskingQuestion => _isAskingQuestion;
-
   String _statusMessage = "Please start a session.";
-  String get statusMessage => _statusMessage;
-
-  // THIS IS THE CORRECTED PART: We only store the most recent answer.
   String? _currentAnswer;
-  String? get currentAnswer => _currentAnswer;
 
-  // --- Public Methods (Use Cases) ---
+  // --- Model and Mode State ---
+  String? _selectedModel;
+  String? _selectedMode;
+
+  // --- GETTERS ---
+  RecordingMode get currentMode => _currentMode;
+  bool get isRecording => _isRecording;
+  bool get isAskingQuestion => _isAskingQuestion;
+  String get statusMessage => _statusMessage;
+  String? get currentAnswer => _currentAnswer;
+  String? get selectedModel => _selectedModel;
+  String? get selectedMode => _selectedMode;
+
+  // --- CONSTRUCTOR ---
+  SessionViewModel() {
+    // Load preferences when the ViewModel is first created.
+    _loadPreferences();
+  }
+
+  // --- PRIVATE METHODS ---
+  Future<void> _loadPreferences() async {
+    _selectedModel = await _preferenceService.getLastSessionModel();
+    // --- THIS LINE IS NOW CORRECTED ---
+    _selectedMode = await _preferenceService.getLastAnalysisMode();
+    notifyListeners();
+  }
+
+  // --- PUBLIC METHODS ---
+
+  // Called from the UI to change the model
+  Future<void> setModel(String? model) async {
+    _selectedModel = model;
+    if (model != null) {
+      await _preferenceService.setLastSessionModel(model);
+    }
+    notifyListeners();
+  }
+
+  // Called from the UI to change the mode
+  Future<void> setMode(String? mode) async {
+    _selectedMode = mode;
+    if (mode != null) {
+      await _preferenceService.setLastAnalysisMode(mode);
+    }
+    notifyListeners();
+  }
 
   Future<void> initializeSession() async {
     _statusMessage = "Initializing session...";
-    _currentAnswer = null; // Clear any previous answer
+    _currentAnswer = null;
     notifyListeners();
 
     try {
@@ -97,9 +133,6 @@ class SessionViewModel extends ChangeNotifier {
     _isRecording = false;
     _statusMessage = "Recording paused.";
     notifyListeners();
-    print(
-      "Recording stopped and timer cancelled.",
-    ); // Add a print statement for debugging
   }
 
   Future<void> processCapturedFrame(String imagePath) async {
@@ -120,16 +153,25 @@ class SessionViewModel extends ChangeNotifier {
     }
   }
 
-  // THIS METHOD IS NOW SIMPLER
   Future<void> askQuestion(String question) async {
     if (_sessionId == null || question.isEmpty) return;
+    if (_selectedModel == null || _selectedMode == null) {
+      _currentAnswer = "Please select a model and mode first.";
+      notifyListeners();
+      return;
+    }
 
     _isAskingQuestion = true;
-    _currentAnswer = null; // Clear the old answer while waiting for the new one
+    _currentAnswer = null;
     notifyListeners();
 
     try {
-      final result = await _apiService.askQuestion(_sessionId!, question);
+      final result = await _apiService.askQuestion(
+        _sessionId!,
+        question,
+        _selectedModel!,
+        _selectedMode!,
+      );
       _currentAnswer = result.answer ?? "No answer received.";
     } catch (e) {
       _currentAnswer = "Error: Could not get answer.";
