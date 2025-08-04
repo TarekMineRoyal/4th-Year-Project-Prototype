@@ -12,7 +12,7 @@ from src.application.services.vision_service import VisionService
 from src.application.services.storage_service import StorageService
 from .strategies import VideoSceneExtractor, FrameSceneExtractor
 from src.domain.entities.live_session import SessionAnalysVideoRequest
-from ...infrastructure.prompt_loader import prompt_loader
+from src.application.services.prompt_service import PromptService
 
 # Get a logger instance for this module
 logger = structlog.get_logger(__name__)
@@ -35,7 +35,7 @@ def get_session(session_id: str) -> SessionState:
 
 # --- BACKGROUND TASK WORKER (Moved outside the class) ---
 # This is the new, independent function for the background task.
-def run_aggregation_task_worker(session_id: str, video_scene_aggregator_model: str, vision_service: VisionService):
+def run_aggregation_task_worker(session_id: str, video_scene_aggregator_model: str, vision_service: VisionService, prompt_service: PromptService):
     """
     The "consumer" part of the pipeline. It processes all pending descriptions
     in the queue for a given session. It is now a standalone function.
@@ -58,7 +58,7 @@ def run_aggregation_task_worker(session_id: str, video_scene_aggregator_model: s
 
         # --- Perform the AI call outside the lock ---
         try:
-            aggregator_prompt = prompt_loader.get(
+            aggregator_prompt = self.prompt_service.get(
             'live_session.narrative_aggregator',
             current_narrative=session.current_narrative,
             next_desc=next_desc
@@ -87,9 +87,10 @@ class LiveSessionUseCase:
     Orchestrates the stateful Live Session.
     """
 
-    def __init__(self, vision_service: VisionService, storage_service: StorageService):
+    def __init__(self, vision_service: VisionService, storage_service: StorageService, prompt_service: PromptService):
         self.vision_service = vision_service
         self.storage_service = storage_service
+        self.prompt_service = prompt_service
         logger.info("LiveSessionUseCase initialized")
 
     def create_session(self) -> str:
@@ -117,7 +118,7 @@ class LiveSessionUseCase:
             else:
                 extractor = FrameSceneExtractor(vision_service=self.vision_service)
 
-            scene_prompt = prompt_loader.get('scene_extraction.event_description')
+            scene_prompt = self.prompt_service.get('scene_extraction.event_description')
             scene_description = extractor.extract_scene(
                 media=request.media,
                 prompt=scene_prompt,
@@ -162,10 +163,10 @@ class LiveSessionUseCase:
             current_narrative = session.current_narrative
 
             # 1. Get the prompt for the selected mode.
-            mode_prompt = prompt_loader.get(f'prompt_mode.{request.mode.value}')
+            mode_prompt = self.prompt_service.get(f'prompt_mode.{request.mode.value}')
 
             # 2. Get the contextual QA template and render it.
-            qa_prompt = prompt_loader.get(
+            qa_prompt = self.prompt_service.get(
                 'live_session.contextual_qa',
                 mode_prompt=mode_prompt,
                 current_narrative=current_narrative,

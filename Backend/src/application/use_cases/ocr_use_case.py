@@ -3,7 +3,7 @@ import structlog
 from src.domain.entities import OCRRequest, OCRResult
 from src.application.services.vision_service import VisionService
 from src.application.services.storage_service import StorageService
-from src.infrastructure.prompt_loader import prompt_loader
+from src.application.services.prompt_service import PromptService
 
 logger = structlog.get_logger(__name__)
 
@@ -11,9 +11,10 @@ class OCRUseCase:
     """
     Orchestrates the OCR process. FIX: Now saves the image first.
     """
-    def __init__(self, vision_service: VisionService, storage_service: StorageService):
+    def __init__(self, vision_service: VisionService, storage_service: StorageService, prompt_service: PromptService):
         self.vision_service = vision_service
         self.storage_service = storage_service
+        self.prompt_service = prompt_service
 
     def execute(self, request: OCRRequest) -> OCRResult:
         logger.info("OCRUseCase started.")
@@ -27,7 +28,7 @@ class OCRUseCase:
             )
             logger.info("OCR image saved to storage.", path=analyzed_path)
 
-            prompt = prompt_loader.get('ocr.text_extraction')
+            prompt = self.prompt_service.get('ocr.text_extraction')
 
             logger.info("Calling ocr service for OCR analysis.", model_option=request.model_option)
 

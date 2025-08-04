@@ -5,7 +5,7 @@ from src.application.services.dataset_service import DatasetService
 from src.domain.entities import VQARequest, VQAResult
 from src.application.services.vision_service import VisionService
 from src.application.services.storage_service import StorageService
-from src.infrastructure.prompt_loader import prompt_loader
+from src.application.services.prompt_service import PromptService
 
 logger = structlog.get_logger(__name__)
 
@@ -13,10 +13,11 @@ class VQAUseCase:
     """
     Orchestrates the VQA process.
     """
-    def __init__(self, vision_service: VisionService, storage_service: StorageService, dataset_service: DatasetService):
+    def __init__(self, vision_service: VisionService, storage_service: StorageService, dataset_service: DatasetService, prompt_service: PromptService):
         self.vision_service = vision_service
         self.storage_service = storage_service
         self.dataset_service = dataset_service
+        self.prompt_service = prompt_service
 
     async def execute(self, request: VQARequest, background_tasks: BackgroundTasks) -> VQAResult:
         logger.info("VQAUseCase started.")
@@ -31,13 +32,13 @@ class VQAUseCase:
             logger.info("VQA image saved to storage.", path=analyzed_path)
 
             # 1. Get the prompt for the selected mode.
-            mode_prompt = prompt_loader.get(f'prompt_mode.{request.mode.value}')
+            mode_prompt = self.prompt_service.get(f'prompt_mode.{request.mode.value}')
 
             # 2. Get the main system persona template and inject the mode prompt.
-            system_prompt = prompt_loader.get('vqa.system_persona', mode_prompt=mode_prompt)
+            system_prompt = self.prompt_service.get('vqa.system_persona', mode_prompt=mode_prompt)
 
             # 3. Construct the final prompt for the user's question.
-            prompt = prompt_loader.get(
+            prompt = self.prompt_service.get(
                 'vqa.user_question_template',
                 system_prompt=system_prompt,
                 question=request.question
