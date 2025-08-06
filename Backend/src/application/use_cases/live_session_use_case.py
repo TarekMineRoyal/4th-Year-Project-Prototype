@@ -58,7 +58,7 @@ def run_aggregation_task_worker(session_id: str, video_scene_aggregator_model: s
 
         # --- Perform the AI call outside the lock ---
         try:
-            aggregator_prompt = self.prompt_service.get(
+            aggregator_prompt = prompt_service.get(
             'live_session.narrative_aggregator',
             current_narrative=session.current_narrative,
             next_desc=next_desc
@@ -142,7 +142,8 @@ class LiveSessionUseCase:
                         run_aggregation_task_worker,
                         request.session_id,
                         request.aggregation_model_option,
-                        self.vision_service
+                        self.vision_service,
+                        self.prompt_service
                     )
                 else:
                     logger.info("Aggregator is already running. Not starting a new one.", session_id=request.session_id)

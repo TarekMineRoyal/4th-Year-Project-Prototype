@@ -16,7 +16,7 @@ class OCRUseCase:
         self.storage_service = storage_service
         self.prompt_service = prompt_service
 
-    def execute(self, request: OCRRequest) -> OCRResult:
+    async def execute(self, request: OCRRequest) -> OCRResult:
         logger.info("OCRUseCase started.")
         start_time = time.time()
 
